@@ -1,0 +1,11 @@
+*.csv
+*.jld
+*.h5
+*.hdf5
+*.pdf
+*.txt
+*.swp
+examples/debug*.jl
+Manifest.toml
+examples/Manifest.toml
+test/Mainfest.toml
