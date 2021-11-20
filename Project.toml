@@ -15,4 +15,8 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 StaticArrays = "1"
+LoopVectorization = "0.12"
+MicroCollections = "0.1"
+NearestNeighbors = "0.4"
+FLoops = "0.1"
 julia = "1"
