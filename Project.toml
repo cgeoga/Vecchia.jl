@@ -14,6 +14,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
+MicroCollections = "0.1"
 NearestNeighbors = "0.4"
 FLoops = "0.1"
 julia = "1"
