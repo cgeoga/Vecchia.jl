@@ -4,7 +4,7 @@
 A terse Julia implementation of Vecchia approximations to the Gaussian
 likelihood, which work very well and run in *linear complexity with data size*
 (assuming O(1) sized conditioning sets).  Implemented with chunked observations
-instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB. Reasonably
+instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB [1]. Reasonably
 optimized for minimal allocations so that multithreading (via the excellent
 FLoops ecosystem) really works well while still being AD-compatible. 
 
@@ -40,8 +40,8 @@ ForwardDiff.hessian(obj, sample_p)
 
 # You can also make the induced sparse precision matrix from the model
 # (BUT, keep in mind there is also a permutation of the data here. So this is
-the approximated precision matrix for your data re-ordered as reduce(vcat,
-vecc.data) :
+# the approximated precision matrix for your data re-ordered as 
+# reduce(vcat, vecc.data)) :
 const sparse_Omega = Vecchia.precisionmatrix(vecc, sample_p)
 ```
 
@@ -69,3 +69,6 @@ If you use this software in your work, please cite the package itself. I would
 also be curious to see/hear about your application if you're willing to share
 it or take the time to tell me about it.
 
+# References
+
+[1] https://rss.onlinelibrary.wiley.com/doi/abs/10.1046/j.1369-7412.2003.05512.x
