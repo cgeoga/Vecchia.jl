@@ -3,10 +3,11 @@
 
 A terse Julia implementation of Vecchia approximations to the Gaussian
 likelihood, which work very well and run in *linear complexity with data size*
-(assuming O(1) sized conditioning sets).  Implemented with chunked observations
-instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB [1]. Reasonably
-optimized for minimal allocations so that multithreading (via the excellent
-FLoops ecosystem) really works well while still being AD-compatible. 
+(assuming O(1) sized conditioning sets). As of now this is only implemented for
+mean-zero processes. Implemented with chunked observations instead of singleton
+observations as in Stein/Chi/Welty 2004 JRSSB [1]. Reasonably optimized for
+minimal allocations so that multithreading (via the excellent FLoops ecosystem)
+really works well while still being AD-compatible. 
 
 Here is a very quick demo:
 
