@@ -11,7 +11,7 @@ FLoops ecosystem) really works well while still being AD-compatible.
 Here is a very quick demo:
 
 ```julia
-using Vecchia
+using LinearAlgebra, StaticArrays, Vecchia
 
 # VERY IMPORTANT FOR MULTITHREADING, since this is many small BLAS/LAPACK calls:
 BLAS.set_num_threads(1)
@@ -38,7 +38,10 @@ using ForwardDiff
 obj(p) = Vecchia.nll(vecc, p)
 ForwardDiff.hessian(obj, sample_p)
 
-# You can also make the induced sparse precision matrix from the model:
+# You can also make the induced sparse precision matrix from the model
+# (BUT, keep in mind there is also a permutation of the data here. So this is
+the approximated precision matrix for your data re-ordered as reduce(vcat,
+vecc.data) :
 const sparse_Omega = Vecchia.precisionmatrix(vecc, sample_p)
 ```
 
