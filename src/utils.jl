@@ -48,12 +48,12 @@ function sunsteinchunk_naive(T, n, cpbuf, solve, fccov,
   for (j, ptixj) in enumerate(pts_ixs)
     ej    = zeros(T, length(pts_ixs))
     ej[j] = one(T)
-    ldiv!(fccov.L, ej)
+    ldiv!(fccov.U', ej)
     bt[:,ptixj] .= ej
   end
   # solve the linear system, overwriting input "solve", and update the
   # corresponding columns of bt:
-  ldiv!(fccov.L, Adjoint(solve))
+  ldiv!(fccov.U', Adjoint(solve))
   for (j, rowj) in enumerate(eachrow(solve))
     bt[:,cnd_ixs[j]] .= -rowj
   end
@@ -112,7 +112,7 @@ function prepare_columns(T, solve, fccov)
     colj[row_counter] = one(T)
   end
   lastchunk = view(out, :, (size(solve, 1)+1):sz)
-  ldiv!(fccov.L, lastchunk)
+  ldiv!(fccov.U', lastchunk)
   out
 end
 
@@ -126,8 +126,8 @@ function sunsteinchunk(T, n, solve, fccov, mulbuf,
                        cnd_ixs::AbstractVector{Int64})::Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
   # Incredibly, this hcat code seems to be more efficient than prepare_columns
   # above. I'm really confused about how it has fewer allocations. 
-  ldiv!(fccov.L, Adjoint(solve))
-  combined     = hcat(-permutedims(solve), inv(fccov.L))
+  ldiv!(fccov.U', Adjoint(solve))
+  combined     = hcat(-permutedims(solve), inv(fccov.U'))
   combined_ixs = vcat(cnd_ixs, pts_ixs)
   # index set:
   (Iv, Jv) = sparseIJvecs_ltri(1:length(combined_ixs))

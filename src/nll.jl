@@ -3,14 +3,14 @@
 function negloglik(kfun, params, pts, vals, w1)
   updatebuf!(w1, pts, pts, kfun, params)
   K   = cholesky!(Symmetric(w1))
-  tmp = K.L\vals # alloc 1
+  tmp = K.U'\vals # alloc 1
   0.5*(logdet(K) + sum(abs2, tmp))
 end
 
 # A negloglik where a mean and covariance matrix are provided.
 function negloglik(K::Cholesky, mu, vals)
-  mu .-= vals    # note now that mu is not the mean anymore.
-  ldiv!(K.L, mu) # "mu" is now actually K.L\(vals - mu)
+  mu .-= vals     # note now that mu is not the mean anymore.
+  ldiv!(K.U', mu) # "mu" is now actually K.L\(vals - mu)
   0.5*(logdet(K) + sum(abs2, mu))
 end
 
@@ -22,7 +22,7 @@ end
 # Conditional negative log-likelihood. Organized in such a way that you
 # accurately compute the mean and covariance of the conditioned component and
 # then pass those values to negloglik.
-function cond_negloglik(kfun, params::Vector{T}, pts, vals, 
+function cond_negloglik(kfun, params::AbstractVector{T}, pts, vals, 
                         cond_pts, cond_vals, w1, w2, w3) where{T}
   # Update the buffers:
   updatebuf!(w1, cond_pts, cond_pts, kfun, params, skipltri=true) 
@@ -35,26 +35,23 @@ function cond_negloglik(kfun, params::Vector{T}, pts, vals,
   # conditional mean, the one remaining allocation in this function. 
   mu = K_pts_condt'*(K_cond_cond\cond_vals) 
   # Conditional covariance, reusing buffers liberally (see ?mul! in a REPL):
-  ldiv!(K_cond_cond.L, K_pts_condt)
+  ldiv!(K_cond_cond.U', K_pts_condt)
   mul!(K_pts_pts, adjoint(K_pts_condt), K_pts_condt, -one(T), one(T))
   sig = cholesky!(Symmetric(K_pts_pts))
   # Regular negloglik with computed conditional covariance and mean:
   negloglik(sig, mu, vals)
 end
 
-function nll(V::VecchiaConfig{D,F}, params::Vector{T};
-             execmode=ThreadedEx(), 
-             include_ixs::AbstractVector{Int64}=1:length(V.condix)) where{D,F,T}
-  # Allocate all the matrix buffers, and as many as there are threads:
+function nll(V::VecchiaConfig{D,F}, params::AbstractVector{T};
+             execmode=ThreadedEx())::T where{D,F,T}
   chsz   = V.chunksize
   ccsz   = chsz*V.blockrank
   out    = zero(T)
   @floop execmode for j in 1:length(V.condix)
+    # Allocate work buffers the correct way:
     @init workcc = Array{T}(undef, ccsz, ccsz)
     @init workcp = Array{T}(undef, ccsz, chsz)
     @init workpp = Array{T}(undef, chsz, chsz)
-    # If this isn't one of the included indices, just skip it.
-    !in(j, include_ixs) && return zero(T)
     # Get the likelihood points, data, and buffer for K(pts, pts) sorted out:
     pts  = V.pts[j]
     dat  = V.data[j]
