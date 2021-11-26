@@ -8,27 +8,34 @@ ltrisz(n) = div(n*(n+1), 2)
 # Update kernel matrix buffer, exploiting redundancy for symmetric case. Not
 # necessarily faster unless the kernel is very expensive to evaluate, but not
 # slower in any case in my experimentation.
+#
+# Note that this does _NOT_ use threads, since I am already assuming that the
+# nll function itself will be using threads, and in my benchmarking putting
+# threaded constructors here slows things down a bit and increases allocations.
+#
+# TODO (cg 2021/11/26 09:42): why is my @turbo failing here? Should ask Chris
+# Elrod. Because there probably actually is some perf to be gained here.
 function updatebuf!(buf, pts1, pts2, kfun, params; skipltri=false)
   if pts1 == pts2 && skipltri
-    for (k, ptk) in enumerate(pts2)
+    for k in eachindex(pts2)
+      ptk = pts2[k]
+      @inbounds buf[k,k] = kfun(ptk, ptk, params)
       @inbounds for j in 1:(k-1)
         buf[j,k] = kfun(pts1[j], ptk, params)
       end
-      @inbounds buf[k,k] = kfun(ptk, ptk, params)
     end
   elseif pts1 == pts2 && !skipltri
-    for (k, ptk) in enumerate(pts2)
+    for k in eachindex(pts2)
+      ptk = pts2[k]
+      @inbounds buf[k,k] = kfun(ptk, ptk, params)
       @inbounds for j in 1:(k-1)
         buf[j,k] = kfun(pts1[j], ptk, params)
         buf[k,j] = kfun(pts1[j], ptk, params)
       end
-      @inbounds buf[k,k] = kfun(ptk, ptk, params)
     end
   else
-    for (k, ptk) in enumerate(pts2)
-      @inbounds for j in 1:length(pts1)
-        buf[j,k] = kfun(pts1[j], ptk, params)
-      end
+    @inbounds for k in eachindex(pts2), j in eachindex(pts1) 
+      buf[j,k] = kfun(pts1[j], pts2[k], params)
     end
   end
   nothing
