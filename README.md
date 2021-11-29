@@ -46,6 +46,35 @@ ForwardDiff.hessian(obj, sample_p)
 const sparse_Omega = Vecchia.precisionmatrix(vecc, sample_p)
 ```
 
+There is also an "expert mode" for those interested in additionally utilizing
+SIMD where possible using `LoopVectorization.jl`. To do this, we need to change
+the format of the stored locations. This is entirely abstracted away from the
+user and not your problem, but you will need to write a new version of your
+covariance function that takes all of the location coordinates as scalars. For
+example:
+```julia
+# Note that this is equal to kfn above, but instead of expecting x and y as
+# AbstractVector types (or anything where norm(x-y) works), now you pass in 
+# each component. 
+function kfn_scalar(x1, x2, y1, y2, p)
+  nrm = sqrt((x1-y1)^2 + (x2-y2)^2)
+  p[1]*exp(-nrm/p[2])*(1+nrm/p[2])
+end
+
+# We still need to keep track of the dimension information somehow, so for now
+# the fix is simply to construct the "scalarized" version from the normal version:
+const vecc_s   = Vecchia.scalarize(vecc, kfn_scalar)
+
+# With just that little bit of extra code, now this nll function call will use SIMD
+# to assemble the covariance matrices. On my computer with an intel i5-11600K, which
+# has the AVX-512 instruction set, this is a factor of two faster than the nll with
+# the standard VecchiaConfig struct. 
+Vecchia.nll(vecc_s, sample_p)
+```
+Much gratitude to Chris Elrod for helping me understand how to correctly use
+`@generated` functions to make the assembly functions efficient for arbitrary
+coordinate dimensions. And for creating `LoopVectorization.jl`, of course.
+
 See the example files for a complete demonstration of using `ForwardDiff`'s
 caching and the Ipopt optimizer for some seriously powerful and efficient
 maximum likelihood estimation.

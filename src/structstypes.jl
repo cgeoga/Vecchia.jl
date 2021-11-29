@@ -1,16 +1,31 @@
 
 const PrecisionPiece{T} = Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
 
+abstract type AbstractVecchiaConfig{D,F} end
+
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
 # And having them sort of provides a dangerously easy option to not check and
 # make sure what those sizes really need to be.
-struct VecchiaConfig{D,F} 
+struct VecchiaConfig{D,F} <: AbstractVecchiaConfig{D,F}
   chunksize::Int64
   blockrank::Int64
   kernel::F
   data::Vector{Vector{Float64}}
   pts::Vector{Vector{SVector{D, Float64}}}
+  condix::Vector{Vector{Int64}} 
+end
+
+# TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
+# here? Arguably the are redundant and encoded in the data/pts/condix values.
+# And having them sort of provides a dangerously easy option to not check and
+# make sure what those sizes really need to be.
+struct ScalarVecchiaConfig{D,F} <: AbstractVecchiaConfig{D,F}
+  chunksize::Int64
+  blockrank::Int64
+  kernel::F
+  data::Vector{Vector{Float64}}
+  pts::Vector{Vector{Float64}}
   condix::Vector{Vector{Int64}} 
 end
 
@@ -70,5 +85,16 @@ function nystrom_kdtreeconfig(data, pts, chunksize, blockrank, kfun, nys_size)
   VecchiaConfig{D,F}(min(chunksize+nys_size, length(first(pts_out))),
                      min(blockrank+1, length(pts_out)),
                      kfun, dat_out, pts_out, condix)
+end
+
+
+function scalarize(v::VecchiaConfig{D,F}, scalarized_kernel::G) where{D,F,G}
+  scalarized_pts = map(x->reduce(vcat, x), v.pts)
+  ScalarVecchiaConfig{D,G}(v.chunksize,
+                           v.blockrank,
+                           scalarized_kernel,
+                           v.data,
+                           scalarized_pts,
+                           v.condix)
 end
 

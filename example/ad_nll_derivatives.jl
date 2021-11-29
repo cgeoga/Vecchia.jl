@@ -13,7 +13,7 @@
 # to make a huge difference. But that just means I have a problem to take care
 # of somewhere else.
 
-using ForwardDiff, StaticArrays
+using ForwardDiff, StaticArrays, SIMDDualNumbers
 const RESULTS = Dict{UInt64, DiffResults.MutableDiffResult}()
   
 __nll(p) = nll(vecc, SVector{2,eltype(p)}(p))

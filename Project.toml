@@ -1,7 +1,7 @@
 name = "Vecchia"
 uuid = "8d73829f-f4b0-474a-9580-cecc8e084068"
 authors = ["Chris Geoga <christopher.geoga@rutgers.edu>"]
-version = "0.2.2"
+version = "0.3.0"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
@@ -15,9 +15,9 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 BangBang = "0.3"
-StaticArrays = "1"
+FLoops = "0.1"
 LoopVectorization = "0.12"
 MicroCollections = "0.1"
 NearestNeighbors = "0.4"
-FLoops = "0.1"
+StaticArrays = "1"
 julia = "1"
