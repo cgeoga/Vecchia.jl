@@ -2,12 +2,24 @@
 # Vecchia.jl
 
 A terse Julia implementation of Vecchia approximations to the Gaussian
-likelihood, which work very well and run in *linear complexity with data size*
-(assuming O(1) sized conditioning sets). As of now this is only implemented for
-mean-zero processes. Implemented with chunked observations instead of singleton
-observations as in Stein/Chi/Welty 2004 JRSSB [1]. Reasonably optimized for
-minimal allocations so that multithreading (via the excellent FLoops ecosystem)
-really works well while still being AD-compatible. 
+likelihood, which work very well in many settings and run in *linear complexity
+with data size* (assuming O(1) sized conditioning sets). As of now this is only
+implemented for mean-zero processes. Implemented with chunked observations
+instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB [1].
+Reasonably optimized for minimal allocations so that multithreading (via the
+excellent FLoops ecosystem) really works well while still being AD-compatible. 
+
+The accuracy of Vecchia approximations depends on the *screening effect* [2],
+which can perhaps be considered as a substantially weakened Markovian-like
+property. But the screening effect even for covariance functions that do exhibit
+screening can be significantly weakened by measurement noise (corresponding to a
+"nugget" in the spatial statistics terminology), for example, and so I highly
+recommend investigating whether or not you have reason to expect that your
+specific model exhibits screening to an acceptable degree. In some cases, like
+with measurement noise, there are several workarounds and some are pretty easy.
+But for some covariance functions screening really doesn't hold and so this
+approximation scheme may not perform well. This isn't something that the code
+can enforce, so user discretion is required.
 
 Here is a very quick demo:
 
@@ -102,3 +114,5 @@ it or take the time to tell me about it.
 # References
 
 [1] https://rss.onlinelibrary.wiley.com/doi/abs/10.1046/j.1369-7412.2003.05512.x
+
+[2] https://arxiv.org/pdf/1203.1801.pdf
