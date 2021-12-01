@@ -38,24 +38,6 @@ function updatebuf!(buf, pts1, pts2, kfun, params; skipltri=false)
   nothing
 end
 
-#=
-@generated function _updatebuf_avx!(buf, ::Val{D}, ptv, prm) where{D} 
-  quote
-    #out = Matrix{Float64}(undef, div(length(ptv), $D), div(length(ptv), $D))
-    for _k in 0:div(length(ptv)-1,$D)
-      @turbo for _j in 0:_k
-        val = scalarkernel($([:(ptv[_j*$D+$d]) for d in 1:D]...),
-                           $([:(ptv[_k*$D+$d]) for d in 1:D]...),
-                            prm)
-        buf[_j+1,_k+1] = val
-      end
-    end
-    #Symmetric(out)
-    nothing
-  end
-end
-=#
-
 # This function works pretty differently: now we assume that the points have all
 # been catted together and that the kernel function takes entirely scalar
 # inputs. With this formatting, we can then actually use the SIMD tools of
