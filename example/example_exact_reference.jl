@@ -17,19 +17,19 @@ egrad!(p, store) = ForwardDiff.gradient!(store, _enll, p)
 ehess(p) = ForwardDiff.hessian(_enll, p)
 
 # Set up and solve the problem in Ipopt:
-exact_prob = createProblem(2,ones(2).*1.0e-3, ones(2).*100.0,
-                           0,Float64[], Float64[],
-                           0,3,
-                           _enll,
-                           (args...)->nothing,
-                           egrad!,
-                           (args...)->nothing,
-                           (x,m,r,c,o,l,v)->ipopt_hessian(x,m,r,c,o,l,v,
-                                                          ehess,Function[],0))
-addOption(exact_prob, "tol",      1.0e-5)
-addOption(exact_prob, "max_iter", 1000)
+exact_prob = CreateIpoptProblem(
+               2,ones(2).*1.0e-3, ones(2).*100.0,
+               0,Float64[], Float64[],
+               0,3,
+               _enll,
+               (args...)->nothing,
+               egrad!,
+               (args...)->nothing,
+               (x,r,c,o,l,v)->ipopt_hessian(x,r,c,o,l,v,ehess,Function[],0))
+AddIpoptNumOption(exact_prob, "tol",      1.0e-5)
+AddIpoptIntOption(exact_prob, "max_iter", 1000)
 exact_prob.x = ones(2)
-@time estatus = solveProblem(exact_prob)
+@time estatus = IpoptSolve(exact_prob)
 @assert iszero(estatus) "Optimization for exact likelihood problem failed."
 
 # Here are your MLE and observed information matrix:

@@ -13,9 +13,9 @@ function hes_structure!(rows, cols, len)
   nothing
 end
 
-function ipopt_hessian(xarg, mode, rows, cols, obj_factor, lams, values,
+function ipopt_hessian(xarg, rows, cols, obj_factor, lams, values,
                        hessfn, constr_hessv, nconstr)
-  (mode == :Structure) && return hes_structure!(rows, cols, length(xarg))
+  isnothing(values) && return hes_structure!(rows, cols, length(xarg))
   @assert length(lams) == nconstr "Disagreement in lengths of lambdas and constraint functions."
   h = hessfn(xarg)
   values .= hes_reshape(h, length(xarg)).*obj_factor
@@ -33,8 +33,8 @@ function jac_structure!(rows, cols, len, nconstr)
   nothing
 end
 
-function ipopt_constr_jac(xarg, mode, rows, cols, values, g_jac, nconstr)
-  (mode == :Structure) && return jac_structure!(rows, cols, length(xarg), nconstr)
+function ipopt_constr_jac(xarg, rows, cols, values, g_jac, nconstr)
+  isnothing(values) && return jac_structure!(rows, cols, length(xarg), nconstr)
   values .= g_jac(xarg)
 end
 

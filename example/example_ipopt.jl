@@ -21,17 +21,17 @@ BLAS.set_num_threads(1)
 include("ad_nll_derivatives.jl")
 
 # Set up and solve the problem in Ipopt.
-prob = createProblem(2,ones(2).*1.0e-3, ones(2).*100.0,
-                     0,Float64[], Float64[], 0,3,
-                     _nll,  (args...)->nothing,
-                     grad!, (args...)->nothing,
-                     (x,m,r,c,o,l,v)->ipopt_hessian(x,m,r,c,o,l,v,
-                                                    hess,Function[],0))
-addOption(prob, "tol",      1.0e-5)
-addOption(prob, "max_iter", 1000)
+prob = CreateIpoptProblem(
+         2,ones(2).*1.0e-3, ones(2).*100.0,
+         0,Float64[], Float64[], 0,3,
+         _nll,  (args...)->nothing,
+         grad!, (args...)->nothing,
+         (x,r,c,o,l,v)->ipopt_hessian(x,r,c,o,l,v,hess,Function[],0))
+AddIpoptNumOption(prob, "tol",      1.0e-5)
+AddIpoptIntOption(prob, "max_iter", 1000)
 prob.x = ones(2)
 println("Solving problem with Vecchia approximation:")
-@time status = solveProblem(prob)
+@time status = IpoptSolve(prob)
 
 # Here are your MLE and observed information matrix, with pretty display:
 mle = copy(prob.x)
