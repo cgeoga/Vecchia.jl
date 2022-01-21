@@ -15,7 +15,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 BangBang = "0.3"
-FLoops = "0.1"
+FLoops = "0.1, 0.2"
 LoopVectorization = "0.12"
 MicroCollections = "0.1"
 NearestNeighbors = "0.4"
