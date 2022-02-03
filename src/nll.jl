@@ -26,8 +26,9 @@ end
 # Conditional negative log-likelihood. Organized in such a way that you
 # accurately compute the mean and covariance of the conditioned component and
 # then pass those values to negloglik.
-function cond_negloglik(::Val{S}, kfun, params::AbstractVector{T}, pts, vals, 
-                        cond_pts, cond_vals, w1, w2, w3) where{S,D,T}
+function cond_negloglik(::Val{S}, kfun, params, pts, vals, 
+                        cond_pts, cond_vals, w1, w2, w3) where{S}
+  Z = promote_type(eltype(params), eltype(vals))
   # Update the buffers:
   if !iszero(S)
     updatebuf_avx!(w1, Val(S), cond_pts, cond_pts, kfun, params, skipltri=true) 
@@ -46,23 +47,24 @@ function cond_negloglik(::Val{S}, kfun, params::AbstractVector{T}, pts, vals,
   mu = K_pts_condt'*(K_cond_cond\cond_vals) 
   # Conditional covariance, reusing buffers liberally (see ?mul! in a REPL):
   ldiv!(K_cond_cond.U', K_pts_condt)
-  mul!(K_pts_pts, adjoint(K_pts_condt), K_pts_condt, -one(T), one(T))
+  mul!(K_pts_pts, adjoint(K_pts_condt), K_pts_condt, -one(Z), one(Z))
   sig = cholesky!(Symmetric(K_pts_pts))
   # Regular negloglik with computed conditional covariance and mean:
   negloglik(sig, mu, vals)
 end
 
-function nll(V::AbstractVecchiaConfig{D,F}, params::AbstractVector{T};
-             execmode=ThreadedEx())::T where{D,F,T}
+function nll(V::AbstractVecchiaConfig{H,D,F}, params::AbstractVector{T};
+             execmode=ThreadedEx()) where{H,D,F,T}
+  Z      = promote_type(H,T)
   chsz   = V.chunksize
   ccsz   = chsz*V.blockrank
-  out    = zero(T)
+  out    = zero(Z)
   scalar = (V isa ScalarVecchiaConfig) ? Val(D) : Val(0)
   @floop execmode for j in 1:length(V.condix)
     # Allocate work buffers the correct way:
-    @init workcc = Array{T}(undef, ccsz, ccsz)
-    @init workcp = Array{T}(undef, ccsz, chsz)
-    @init workpp = Array{T}(undef, chsz, chsz)
+    @init workcc = Array{Z}(undef, ccsz, ccsz)
+    @init workcp = Array{Z}(undef, ccsz, chsz)
+    @init workpp = Array{Z}(undef, chsz, chsz)
     # Get the likelihood points, data, and buffer for K(pts, pts) sorted out:
     pts  = V.pts[j]
     dat  = V.data[j]
@@ -98,7 +100,7 @@ function nll(V::AbstractVecchiaConfig{D,F}, params::AbstractVector{T};
 end
 
 # for simple debugging and testing.
-function exact_nll(V::VecchiaConfig{D,F}, params::Vector{T}) where{D,T,F}
+function exact_nll(V::VecchiaConfig{H,D,F}, params::Vector{T}) where{H,D,T,F}
   pts = reduce(vcat, V.pts)
   dat = reduce(vcat, V.data)
   buf = Array{T}(undef, length(pts), length(pts))

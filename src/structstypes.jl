@@ -1,17 +1,17 @@
 
 const PrecisionPiece{T} = Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
 
-abstract type AbstractVecchiaConfig{D,F} end
+abstract type AbstractVecchiaConfig{H,D,F} end
 
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
 # And having them sort of provides a dangerously easy option to not check and
 # make sure what those sizes really need to be.
-struct VecchiaConfig{D,F} <: AbstractVecchiaConfig{D,F}
+struct VecchiaConfig{H,D,F} <: AbstractVecchiaConfig{H,D,F}
   chunksize::Int64
   blockrank::Int64
   kernel::F
-  data::Vector{Vector{Float64}}
+  data::Vector{Vector{H}}
   pts::Vector{Vector{SVector{D, Float64}}}
   condix::Vector{Vector{Int64}} 
 end
@@ -20,11 +20,11 @@ end
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
 # And having them sort of provides a dangerously easy option to not check and
 # make sure what those sizes really need to be.
-struct ScalarVecchiaConfig{D,F} <: AbstractVecchiaConfig{D,F}
+struct ScalarVecchiaConfig{H,D,F} <: AbstractVecchiaConfig{H,D,F}
   chunksize::Int64
   blockrank::Int64
   kernel::F
-  data::Vector{Vector{Float64}}
+  data::Vector{Vector{H}}
   pts::Vector{Vector{Float64}}
   condix::Vector{Vector{Int64}} 
 end
@@ -50,10 +50,10 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   dat_out   = dat_out[perm]
   # Create the conditioning meta-indices for the chunks.
   condix  = map(j->cond_ixs(j,blockrank), eachindex(pts_out))
-  (D,F)   = (length(first(pts)), typeof(kfun))
-  VecchiaConfig{D,F}(min(chunksize, length(first(pts_out))),
-                     min(blockrank, length(pts_out)),
-                     kfun, dat_out, pts_out, condix)
+  (H,D,F) = (eltype(data), length(first(pts)), typeof(kfun))
+  VecchiaConfig{H,D,F}(min(chunksize, length(first(pts_out))),
+                       min(blockrank, length(pts_out)),
+                       kfun, dat_out, pts_out, condix)
 end
 
 # Even less good code, but here's a simple connection between Vecchia and the
@@ -81,20 +81,20 @@ function nystrom_kdtreeconfig(data, pts, chunksize, blockrank, kfun, nys_size)
       pushfirst!(cixj, 1)
     end
   end
-  (D,F)   = (length(first(pts)), typeof(kfun))
-  VecchiaConfig{D,F}(min(chunksize+nys_size, length(first(pts_out))),
-                     min(blockrank+1, length(pts_out)),
-                     kfun, dat_out, pts_out, condix)
+  (H,D,F) = (eltype(data), length(first(pts)), typeof(kfun))
+  VecchiaConfig{H, D,F}(min(chunksize+nys_size, length(first(pts_out))),
+                        min(blockrank+1, length(pts_out)),
+                        kfun, dat_out, pts_out, condix)
 end
 
 
-function scalarize(v::VecchiaConfig{D,F}, scalarized_kernel::G) where{D,F,G}
+function scalarize(v::VecchiaConfig{H,D,F}, scalarized_kernel::G) where{H,D,F,G}
   scalarized_pts = map(x->reduce(vcat, x), v.pts)
-  ScalarVecchiaConfig{D,G}(v.chunksize,
-                           v.blockrank,
-                           scalarized_kernel,
-                           v.data,
-                           scalarized_pts,
-                           v.condix)
+  ScalarVecchiaConfig{H,D,G}(v.chunksize,
+                             v.blockrank,
+                             scalarized_kernel,
+                             v.data,
+                             scalarized_pts,
+                             v.condix)
 end
 
