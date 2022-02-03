@@ -107,9 +107,18 @@ fields in `VecchiaConfig` mean and stuff.
 
 # Citation
 
-If you use this software in your work, please cite the package itself. I would
-also be curious to see/hear about your application if you're willing to share
-it or take the time to tell me about it.
+If you use this software in your work, please cite the package itself:
+````
+@software{Geoga_Vecchia_jl,
+  author = {Geoga, Christopher J.},
+  title  = {Vecchia.jl},
+  url    = {https://github.com/cgeoga/Vecchia.jl},
+  year   = {2021},
+  publisher = {Github}
+}
+````
+I would also be curious to see/hear about your application if you're willing to
+share it or take the time to tell me about it.
 
 # References
 
