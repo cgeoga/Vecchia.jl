@@ -58,12 +58,37 @@ ForwardDiff.hessian(obj, sample_p)
 const sparse_Omega = Vecchia.precisionmatrix(vecc, sample_p)
 ```
 
-There is also an "expert mode" for those interested in additionally utilizing
-SIMD where possible using `LoopVectorization.jl`. To do this, we need to change
-the format of the stored locations. This is entirely abstracted away from the
-user and not your problem, but you will need to write a new version of your
-covariance function that takes all of the location coordinates as scalars. For
-example:
+**See the example files for a complete demonstration of using `ForwardDiff`'s
+caching and the Ipopt optimizer for some seriously powerful and efficient
+maximum likelihood estimation.**
+
+The code is organized with modularity and user-specific applications in mind, so
+the primary way to interact with the approximation is to create a
+`VecchiaConfig` object that specifies the chunks and conditioning sets for each
+chunk. The only provided one is a very basic option that orders the points with
+a KD-tree with a specified terminal leaf size (so that each leaf is a chunk),
+re-orders those chunks based on the leaf centers, and then picks conditioning
+sets based on the user-provided size. 
+
+If you want something fancier, for example the maximin ordering of Guinness 2018
+technometrics with the NN-based conditioning sets, which was recently proved to
+have some nice properties (Schafer et al 2021 SISC), that shouldn't be very hard
+to implement after skimming the existing constructor to see what the struct
+fields in `VecchiaConfig` mean and stuff. I really made an effort to design this
+in such a way that you can specialize how you want but then just enjoy the
+painfully optimized generic conditional log-likelihood and precision matrix
+functionality without having to rebuild from scratch every time.
+
+# Advanced Usage
+
+## SIMD via `LoopVectorization.jl`
+
+In some cases, for example with a sufficiently simple covariance function and a
+sufficiently advanced CPU, using SIMD can really speed up likelihood
+evaluations.  To take advantage of this, we need to change the format of the
+stored locations.  This is entirely abstracted away from the user and not your
+problem, but you will need to write a new version of your covariance function
+that takes all of the location coordinates as scalars. For example:
 ```julia
 # Note that this is equal to kfn above, but instead of expecting x and y as
 # AbstractVector types (or anything where norm(x-y) works), now you pass in 
@@ -87,23 +112,76 @@ Much gratitude to Chris Elrod for helping me understand how to correctly use
 `@generated` functions to make the assembly functions efficient for arbitrary
 coordinate dimensions. And for creating `LoopVectorization.jl`, of course.
 
-See the example files for a complete demonstration of using `ForwardDiff`'s
-caching and the Ipopt optimizer for some seriously powerful and efficient
-maximum likelihood estimation.
+## Expensive or Complicated Kernel Functions
 
-The code is organized with modularity and user-specific applications in mind, so
-the primary way to interact with the approximation is to create a
-`VecchiaConfig` object that specifies the chunks and conditioning sets for each
-chunk. The only provided one is a very basic option that orders the points with
-a KD-tree with a specified terminal leaf size (so that each leaf is a chunk),
-re-orders those chunks based on the leaf centers, and then picks conditioning
-sets based on the user-provided size. 
+`Vecchia.jl` is pretty judicious about when and where the covariance function is
+evaluated. For sufficiently fancy kernels that involve a lot of
+side-computations or carrying around additional objects, there might be some
+performance to be gained by "specializing" the internal function
+`Vecchia.updatebuf!`, which is the only place where the kernel function is
+called. Here is an example of this syntax:
+```julia
 
-If you want something fancier, for example the maximin ordering of Guinness 2018
-technometrics with the NN-based conditioning sets, which was recently proved to
-have some nice properties (Schafer et al 2021 SISC), that shouldn't be very hard
-to implement after skimming the existing constructor to see what the struct
-fields in `VecchiaConfig` mean and stuff.
+# Create some struct to carry around all of your extra pieces that, for example,
+# would otherwise need to be computed redundantly.
+struct MyExpensiveKernel
+  # ... 
+end
+
+# Now write a special method of Vecchia.updatebuf!. This might technically be
+# type piracy, but I won't tell anybody if you won't.
+#
+# Note that you could also instead do fn::typeof(myspecificfunction) if you just
+# wanted a special method for one specific function instead of a struct.
+function Vecchia.updatebuf!(buf, pts1, pts2, fn::MyExpensiveKernel,
+                            params; skipltri=false)
+  println("Wow, neat!") 
+  # ... (now do things to update buf)
+end
+
+# Create Vecchia config object:
+const my_vecc_config = Vecchia.kdtreeconfig(..., MyExpensiveKernel(...))
+
+# Now when you call this function, you will see "Wow, neat!" pop up every time
+# that Vecchia.updatebuf! gets called. Once you're done testing and want to
+# actually go fast, I would obviously recommend getting rid of the print
+# statement.
+Vecchia.nll(my_vecc_config, params)
+```
+In general, this probably won't be necessary for you. But I know I for one work
+with some pretty exotic kernels regularly. And from experience I can attest
+that, with some creativity, you can really cram a lot of efficient complexity
+into the approximation with this approach without having to develop any new
+boilerplate.
+
+## Mean functions
+
+...are currently not super officially supported. But you can now pass AD through
+the `VecchiaConfig` struct itself. So a very simple hacky way to get your mean
+function going would be a code pattern like
+```julia
+# see other examples for the rest of the args to the kdtreeconfig and stuff.
+function my_nonzeromean_nll(params, ...)
+  parametric_mean = mean_function(params, ...) 
+  cfg = Vecchia.kdtreeconfig(data - parametric_mean, ...) 
+  Vecchia.nll(cfg, params)
+end
+```
+This will of course mean you rebuild the `VecchiaConfig` every time you evaluate
+the likelihood, which isn't ideal and is why I say that mean functions aren't
+really in this package yet. But then, at least the generic KD-tree configs get
+built pretty quickly, and so if you have enough data that Vecchia approximations
+are actually helpful, you probably won't feel it too much. And now you can just
+do `ForwardDiff.{gradient, hessian}(my_nonzeromean_nll, params)` without any
+additional code. If you wanted to fit billions of points, this probably isn't
+taking the problem seriously enough. But until your data sizes get there, this
+slight inefficiency probably won't be the bottleneck either.
+
+I'm very open to feedback/comments/suggestions on the best way to incorporate
+mean functions. It just isn't obvious to me how best to do it, and I don't
+really need them myself (at least, not beyond what I can do with this current
+pattern) so I'm not feeling super motivated to think hard about the best design
+choice.
 
 # Citation
 
@@ -118,7 +196,7 @@ If you use this software in your work, please cite the package itself:
 }
 ````
 I would also be curious to see/hear about your application if you're willing to
-share it or take the time to tell me about it.
+share it or take the time to tell me about it. 
 
 # References
 

@@ -12,7 +12,7 @@ ltrisz(n) = div(n*(n+1), 2)
 # Note that this does _NOT_ use threads, since I am already assuming that the
 # nll function itself will be using threads, and in my benchmarking putting
 # threaded constructors here slows things down a bit and increases allocations.
-function updatebuf!(buf, pts1, pts2, kfun, params; skipltri=false)
+function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
   if pts1 == pts2 && skipltri
     for k in eachindex(pts2)
       ptk = pts2[k]
