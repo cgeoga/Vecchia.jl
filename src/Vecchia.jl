@@ -1,8 +1,8 @@
 module Vecchia
 
   using LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays
-  using LoopVectorization 
   using FLoops, BangBang, MicroCollections
+  #using LoopVectorization 
 
   export nll
 
