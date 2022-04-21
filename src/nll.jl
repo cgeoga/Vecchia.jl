@@ -7,15 +7,15 @@ function negloglik(::Val{S}, kfun, params, pts, vals, w1) where{S}
     updatebuf!(w1, pts, pts, kfun, params)
   end
   K   = cholesky!(Symmetric(w1))
-  tmp = K.U'\vals # alloc 1
-  0.5*(logdet(K) + sum(abs2, tmp))
+  tmp = K.U'\vals # alloc 1, but this function only gets called once per nll.
+  (logdet(K), sum(x->x^2, tmp))
 end
 
 # A negloglik where a mean and covariance matrix are provided.
 function negloglik(K::Cholesky, mu, vals)
   mu .-= vals     # note now that mu is not the mean anymore.
   ldiv!(K.U', mu) # "mu" is now actually K.L\(vals - mu)
-  0.5*(logdet(K) + sum(abs2, mu))
+  (logdet(K), sum(x->x^2, mu))
 end
 
 function negloglik_precision(Omega, mu, vals)
@@ -54,11 +54,13 @@ function cond_negloglik(::Val{S}, kfun, params, pts, vals,
 end
 
 function nll(V::AbstractVecchiaConfig{H,D,F}, params::AbstractVector{T};
-             execmode=ThreadedEx()) where{H,D,F,T}
+             memoize=false, execmode=ThreadedEx()) where{H,D,F,T}
+  kernel = memoize ? MemoizedKernel(V.kernel, V.pts[1][1], params) : V.kernel
   Z      = promote_type(H,T)
   chsz   = V.chunksize
   ccsz   = chsz*V.blockrank
-  out    = zero(Z)
+  out_logdet = zero(Z)
+  out_qforms = zero(Z)
   scalar = (V isa ScalarVecchiaConfig) ? Val(D) : Val(0)
   @floop execmode for j in 1:length(V.condix)
     # Allocate work buffers the correct way:
@@ -75,10 +77,15 @@ function nll(V::AbstractVecchiaConfig{H,D,F}, params::AbstractVector{T};
     end
     # if j==1, return just the regular negloglik for those points:
     if isone(j) 
-      termj = negloglik(scalar, V.kernel, params, pts, dat, buf3)
+      (ldj, qfj) = negloglik(scalar, kernel, params, pts, dat, buf3)
     else
       # Now that we know the conditioning set isn't empty, get the conditioning
       # points sorted out:
+      #
+      # TODO (cg 2022/04/21 10:39): these are probably among the more
+      # problematic allocations remaining. At some point it would be good to
+      # write a more manual version that again uses pre-allocated work buffers
+      # for this.
       idxs = V.condix[j]
       cpts = reduce(vcat, V.pts[idxs])
       cdat = reduce(vcat, V.data[idxs])
@@ -91,12 +98,16 @@ function nll(V::AbstractVecchiaConfig{H,D,F}, params::AbstractVector{T};
         buf2 = view(workcp, 1:length(cpts), 1:length(pts))
       end
       # Evaluate the conditional nll:
-      termj = cond_negloglik(scalar, V.kernel, params, pts, dat, 
-                             cpts, cdat, buf1, buf2, buf3)
+      (ldj, qfj) = cond_negloglik(scalar, kernel, params, pts, dat, 
+                                  cpts, cdat, buf1, buf2, buf3)
     end
-    @reduce(out  += termj)
+    @reduce(out_logdet += ldj)
+    @reduce(out_qforms += qfj)
   end
-  out
+  # Return the final value, where all the rescaling has been saved to the end
+  # (in the sense that the logdets need to be scaled by the number of samples,
+  # and the whole thing needs to be divided by two).
+  (out_logdet*size(V.data[1],2) + out_qforms)/2
 end
 
 # for simple debugging and testing.
@@ -104,6 +115,7 @@ function exact_nll(V::VecchiaConfig{H,D,F}, params::Vector{T}) where{H,D,T,F}
   pts = reduce(vcat, V.pts)
   dat = reduce(vcat, V.data)
   buf = Array{T}(undef, length(pts), length(pts))
-  negloglik(V.kernel, params, pts, dat, buf)
+  (ld, qf) = negloglik(Val(0), V.kernel, params, pts, dat, buf)
+  0.5*(ld + qf)
 end
 

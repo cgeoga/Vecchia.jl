@@ -13,6 +13,7 @@ ltrisz(n) = div(n*(n+1), 2)
 # nll function itself will be using threads, and in my benchmarking putting
 # threaded constructors here slows things down a bit and increases allocations.
 function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
+  (F <: MemoizedKernel) && (@assert hash(params) === kfun.phash "params for memoized kernel don't agree with provided params. This shouldn't happen and is a bug.")
   if pts1 == pts2 && skipltri
     for k in eachindex(pts2)
       ptk = pts2[k]
@@ -50,8 +51,8 @@ end
   quote
     if pts1 == pts2 && skipltri
       for _k in 0:div(length(pts2)-1,$D)
-        #@turbo for _j in 0:_k # @turbo
-        @inbounds for _j in 0:_k 
+        @turbo for _j in 0:_k # @turbo
+        #@inbounds for _j in 0:_k 
           val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
                      $([:(pts2[_k*$D+$d]) for d in 1:D]...),
                      params)
@@ -60,8 +61,8 @@ end
       end
     elseif pts1 == pts2 && !skipltri
       for _k in 0:div(length(pts2)-1,$D)
-        #@turbo for _j in 0:_k # @turbo
-        @inbounds for _j in 0:_k 
+        @turbo for _j in 0:_k # @turbo
+        #@inbounds for _j in 0:_k 
           val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
                      $([:(pts2[_k*$D+$d]) for d in 1:D]...),
                       params)
@@ -70,8 +71,8 @@ end
         end
       end
     else
-      #@turbo for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) # @turbo
-      @inbounds for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) 
+      @turbo for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) # @turbo
+      #@inbounds for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) 
         val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
                    $([:(pts2[_k*$D+$d]) for d in 1:D]...),
                     params)
@@ -185,8 +186,8 @@ function sunsteinchunk(T, n, solve, fccov, mulbuf,
   # but was significantly faster---by about a factor of 2.
   mul!(mulbuf, Adjoint(combined), combined)
   Vv  = Vector{T}(undef, ltrisz(length(combined_ixs)))
-  #@turbo for l in eachindex(Iv, Jv)
-  @inbounds for l in eachindex(Iv, Jv)
+  @turbo for l in eachindex(Iv, Jv)
+  #@inbounds for l in eachindex(Iv, Jv)
     j     = Iv[l]
     k     = Jv[l]
     Vv[l] = mulbuf[j,k]
@@ -232,5 +233,10 @@ end
 function checksorted(V::VecchiaConfig{D,F}) where{D,F}
   all(issorted, V.condix) || throw(error("This function requires that every conditioning vector be sorted."))
   nothing
+end
+
+# TODO (cg 2022/04/21 16:16): This is totally not good.
+function vec_of_vecs_to_matrows(vv)
+  Matrix(reduce(hcat, vv)')
 end
 

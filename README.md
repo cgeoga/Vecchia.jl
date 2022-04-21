@@ -37,7 +37,8 @@ kfn(x,y,p) = p[1]*exp(-norm(x-y)/p[2])*(1.0+norm(x-y)/p[2])
 const pts = [SVector{2, Float64}(randn(2)) for _ in 1:2048]
 const dat = randn(length(pts))
 
-# Create the VecchiaConfig:
+# Create the VecchiaConfig: 
+# If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
 const chunksize = 64
 const num_conditioning_chunks = 3
 const vecc = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
