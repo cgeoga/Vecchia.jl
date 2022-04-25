@@ -38,3 +38,8 @@ const new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 64, 3, kfn)
 @test isapprox(Vecchia.nll(joint_cfg, ones(2)), 
                Vecchia.nll(vecc, ones(2)) + Vecchia.nll(new_cfg, ones(2)))
 
+# Test 6: make sure that with multiple data the precision matrices are the same.
+const pmat_1 = Vecchia.precisionmatrix(vecc, ones(2))
+const pmat_2 = Vecchia.precisionmatrix(joint_cfg, ones(2))
+@test isapprox(pmat_1, pmat_2)
+

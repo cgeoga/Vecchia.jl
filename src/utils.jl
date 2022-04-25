@@ -223,7 +223,7 @@ end
 function globalidxs(datavv)
   (out, start) = (Vector{UnitRange{Int64}}(undef, length(datavv)), 1)
   for (j, datvj) in enumerate(datavv)
-    len = length(datvj)
+    len = size(datvj,1)
     out[j] = start:(start+len-1)
     start += len
   end
