@@ -59,3 +59,8 @@ function precisionmatrix(V::VecchiaConfig{D,F}, params::Vector{T}) where{D,F,T}
   Symmetric(sparse(sI, sJ, sV), :L)
 end
 
+function nll_precision(S, data)
+  Sf = cholesky(S)
+  0.5*(-logdet(Sf) + dot(data, S, data))
+end
+

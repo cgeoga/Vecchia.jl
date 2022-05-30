@@ -18,11 +18,6 @@ function negloglik(K::Cholesky, mu, vals)
   (logdet(K), sum(x->x^2, mu))
 end
 
-function negloglik_precision(Omega, mu, vals)
-  Omegaf = cholesky(Omega)
-  0.5*(-logdet(Omegaf) + dot(vals-mu, Omega*(vals-mu)))
-end
-
 # Conditional negative log-likelihood. Organized in such a way that you
 # accurately compute the mean and covariance of the conditioned component and
 # then pass those values to negloglik.

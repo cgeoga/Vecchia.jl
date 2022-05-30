@@ -45,6 +45,18 @@ function Base.display(V::ScalarVecchiaConfig)
   println("nsamples:   $(size(V.data[1], 2))")
 end
 
+struct RCholesky{T}
+  diagonals::Vector{UpperTriangular{T,Matrix{T}}}
+  odiagonals::Vector{Matrix{T}}
+  condix::Vector{Vector{Int64}}
+  idxs::Vector{UnitRange{Int64}} 
+  is_instantiated::Bool
+end
+
+# TODO (cg 2022/05/30 12:10): make this more information.
+Base.display(U::RCholesky{T}) where{T} = println("RCholesky{$T}")
+Base.display(Ut::Adjoint{T,RCholesky{T}}) where{T} = println("Adjoint{$T, RCholesky{$T}}")
+
 struct MemoizedKernel{F,T}
   cache::Dict{Tuple{UInt64, UInt64},T}
   phash::UInt64
@@ -145,4 +157,6 @@ function (k::MemoizedKernel{F,T})(x, y, p) where{F,T}
     return _val
   end
 end
+
+
 

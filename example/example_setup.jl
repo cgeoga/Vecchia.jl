@@ -2,7 +2,7 @@
 using LinearAlgebra, StaticArrays, StableRNGs, Vecchia
 
 # Data size:
-const sz = 1024
+const sz = 724
 
 # Covariance function (simple SVector format for pts):
 kfn(x,y,p) = p[1]*exp(-norm(x-y)/p[2])*(1.0+norm(x-y)/p[2])

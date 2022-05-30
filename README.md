@@ -7,7 +7,9 @@ with data size* (assuming O(1) sized conditioning sets). As of now this is only
 implemented for mean-zero processes. Implemented with chunked observations
 instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB [1].
 Reasonably optimized for minimal allocations so that multithreading (via the
-excellent FLoops ecosystem) really works well while still being AD-compatible. 
+excellent FLoops ecosystem) really works well while still being AD-compatible.
+**To my knowledge, this is the only program that offers true Hessians of Vecchia
+likelihoods.** 
 
 The accuracy of Vecchia approximations depends on the *screening effect* [2],
 which can perhaps be considered as a substantially weakened Markovian-like
@@ -51,12 +53,6 @@ Vecchia.nll(vecc, sample_p)
 using ForwardDiff
 obj(p) = Vecchia.nll(vecc, p)
 ForwardDiff.hessian(obj, sample_p)
-
-# You can also make the induced sparse precision matrix from the model
-# (BUT, keep in mind there is also a permutation of the data here. So this is
-# the approximated precision matrix for your data re-ordered as 
-# reduce(vcat, vecc.data)) :
-const sparse_Omega = Vecchia.precisionmatrix(vecc, sample_p)
 ```
 
 **See the example files for a complete demonstration of using `ForwardDiff`'s
@@ -77,10 +73,32 @@ have some nice properties (Schafer et al 2021 SISC), that shouldn't be very hard
 to implement after skimming the existing constructor to see what the struct
 fields in `VecchiaConfig` mean and stuff. I really made an effort to design this
 in such a way that you can specialize how you want but then just enjoy the
-painfully optimized generic conditional log-likelihood and precision matrix
-functionality without having to rebuild from scratch every time.
+painfully optimized generic log-likelihood, precision matrix, and sparse
+(reverse)-Cholesky functionality without having to rebuild from scratch every
+time.
 
 # Advanced Usage
+
+## Sparse precision matrix and ("reverse") Cholesky factors
+
+While it will almost always be faster to just evaluated the likelihood with
+`Vecchia.nll(cfg, params)`, you *can* actually obtain the precision matrix `S`
+such that `Vecchia.nll(cfg, params) == -logdet(S) + dot(data, S, data)`. You can
+*also* obtain the upper triangular matrix `U` such that `S = U*U'`. **Note that
+these objects use permuted data, though, not the ordering in which you provided
+the data**. Here is an example usage:
+```julia
+# using the VecchiaConfig called vecc that was created above:
+S = Vecchia.precisionmatrix(vecc, sample_p)
+
+# Note that this is NOT given in the form of a sparse matrix, it is a custom
+struct with just two methods: U'*x and logdet(U), which is all you need to
+evaluate the likelihood. More documentation on U coming soon.
+U = Vecchia.rchol(vecc, sample_p)
+
+# Here is how I'd recommend getting your data in the correct permutation out:
+data_perm = reduce(vcat, vecc.data)
+```
 
 ## SIMD via `LoopVectorization.jl`
 
@@ -186,7 +204,8 @@ choice.
 
 # Citation
 
-If you use this software in your work, please cite the package itself:
+If you use this software in your work, **particularly if you actually use
+second-order optimization with the real Hessians**,  please cite the package itself:
 ````
 @software{Geoga_Vecchia_jl,
   author = {Geoga, Christopher J.},

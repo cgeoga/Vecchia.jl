@@ -8,6 +8,8 @@ module Vecchia
 
   include("structstypes.jl")
 
+  include("methods.jl")
+
   include("utils.jl")
 
   include("nll.jl")
@@ -15,5 +17,7 @@ module Vecchia
   include("interfaces.jl")
 
   include("precision.jl")
+
+  include("rcholesky.jl")
 
 end 

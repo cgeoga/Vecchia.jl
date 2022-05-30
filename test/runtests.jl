@@ -22,7 +22,7 @@ cmat = [kfn(x,y,ones(2)) for x in ptsv, y in ptsv]
 
 # Test 3: the nll agrees with the one obtained with the Vecchia precision.
 datv = reduce(vcat, vecc_exact.data)
-pnll = Vecchia.negloglik_precision(pmat, zeros(length(sim)), datv)
+pnll = Vecchia.nll_precision(pmat, datv)
 @test isapprox(pnll, debug_nll)
 
 # Test 4: the scalarized nll agrees with the non-scalarized one.
@@ -42,4 +42,8 @@ const new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 64, 3, kfn)
 const pmat_1 = Vecchia.precisionmatrix(vecc, ones(2))
 const pmat_2 = Vecchia.precisionmatrix(joint_cfg, ones(2))
 @test isapprox(pmat_1, pmat_2)
+
+# Test 7: confirm that the rchol-based nll is equal to the standard nll.
+rchol_nll = Vecchia.nll_rchol(vecc, ones(2))
+@test isapprox(rchol_nll, Vecchia.nll(vecc, ones(2)))
 
