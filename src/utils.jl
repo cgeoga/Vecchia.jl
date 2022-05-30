@@ -271,4 +271,23 @@ function updateptsbuf!(ptbuf, ptvv, idxs)
   view(ptbuf, 1:(ix-1))
 end
 
+# Not a clever function at all,
+function rchol_nnz(U::RCholesky{T}) where{T}
+  # diagonal elements:
+  out = sum(U.idxs) do ix
+    n = length(ix)
+    div(n*(n+1), 2)
+  end
+  # off-diagonal elements:
+  out += sum(enumerate(U.condix)) do (j,ix_c)
+    isempty(ix_c) && return 0
+    tmp = 0
+    len = length(U.idxs[j])
+    for ix in ix_c
+      tmp += len*length(U.idxs[ix]) 
+    end
+    tmp
+  end
+  out
+end
 

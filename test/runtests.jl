@@ -1,7 +1,7 @@
 
 include("../example/example_setup.jl")
 
-using Test, Vecchia
+using Test, Vecchia, SparseArrays
 
 # Create a vecc object that uses enough block-conditioning points that the
 # likelihood evaluation is exact.
@@ -46,4 +46,9 @@ const pmat_2 = Vecchia.precisionmatrix(joint_cfg, ones(2))
 # Test 7: confirm that the rchol-based nll is equal to the standard nll.
 rchol_nll = Vecchia.nll_rchol(vecc, ones(2))
 @test isapprox(rchol_nll, Vecchia.nll(vecc, ones(2)))
+
+# Test 8: the same, but with the "sparse" version of the 
+const _U = sparse(Vecchia.rchol(vecc, ones(2)))
+const _S = Symmetric(_U*_U')
+@test isapprox(rchol_nll, Vecchia.nll_precision(_S, datv))
 

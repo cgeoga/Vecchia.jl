@@ -1,17 +1,18 @@
 
 # TODO (cg 2022/05/29 14:42): 
 #
-# 2. Write a special constructor for that struct that gives the sparse matrix,
-#    because I know people will want it. But that should be separate, and maybe
-#    should really only serve as a debugging tool.
+# 5. Longer-term, this constructor occasionally redundantly computes the
+#    cross-covariance for individual chunks (j,k), or at least has the potential
+#    to. It would be nice to offer users the option to allocate even more, but in
+#    doing so create a cache that computes all the pairwise cross-covariances once
+#    and only once, and then uses that cache to fill in chunks of the potentially
+#    blocked cross-covs that are used when your condix has more than a single past
+#    chunk in the conditioning sets.
 #
-# 5. Longer-term, even the fancier RCholesky_Chunks occasionally redundantly
-#    computes the cross-covariance for individual chunks (j,k), or at least has
-#    the potential to. It would be nice to offer users the option to allocate
-#    even more, but in doing so create a cache that computes all the pairwise
-#    cross-covariances one and only once, and then uses that cache to fill in
-#    chunks of the potentially blocked cross-covs that are used when your condix
-#    has more than a single past chunk in the conditioning sets.
+#    This will probably not be earth-shattering in terms of perf unless the
+#    kernel is really expensive...but some kernels are pretty expensive. I
+#    frequently end up working with expensive kernels, even. So worth doing.
+#
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
 function RCholesky_alloc(V::AbstractVecchiaConfig{H,D,F}, T) where{H,D,F}
@@ -109,5 +110,59 @@ function nll_rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
   U    = rchol(V, params; execmode=execmode)
   data = reduce(vcat, V.data)
   nll(U, data)
+end
+
+# So much manual indexing here. I'm sorry to anybody who tries to read this. I
+# just really wanted to keep allocations down, so I really did some grinding on
+# the logic and a lot of manual book-keeping of the indices so I could use
+# setindex! instead of push!.
+#
+# TODO (cg 2022/05/30 15:51): This is mucho serial. Which is probably best
+# because of how fast it should run for even enormous matrices. But at some
+# point should consider a parallel constructor that uses the fancy tools in the
+# Transducers ecosystem (@floop, append!!, push!!, etc) to see if a parallel
+# constructor works faster, even though it will allocate much more.
+function SparseArrays.sparse(U::RCholesky{T}) where{T}
+  master_len = rchol_nnz(U)
+  Iv = Vector{Int64}(undef, master_len)
+  Jv = Vector{Int64}(undef, master_len)
+  Vv = Vector{T}(undef, master_len)
+  master_ix = 1
+  # Diagonal blocks. This section makes no allocations and probably can't really
+  # be improved upon.
+  for (j,ix) in enumerate(U.idxs)
+    Dj = U.diagonals[j]
+    sz = size(Dj, 1)
+    offset = ix[1]-1
+    for col_ix in 1:sz
+      for row_ix in 1:col_ix
+        Iv[master_ix] = row_ix+offset
+        Jv[master_ix] = col_ix+offset
+        Vv[master_ix] = Dj[row_ix, col_ix]
+        master_ix    += 1
+      end
+    end
+  end
+  # Off-diagonal blocks. There are a couple enumerates in here that will
+  # inevitably make a few allocations, but I think for the moment this is about
+  # as optimized as is sensible.
+  for (j,ix_c) in enumerate(U.condix)
+    isempty(ix_c) && continue
+    Bj = U.odiagonals[j]
+    c_offset = 0
+    for ix_c_k in ix_c
+      idxs_c = U.idxs[ix_c_k]
+      for (_i1, i1) in enumerate(idxs_c)
+        for (_i2, i2) in enumerate(U.idxs[j])
+          Iv[master_ix] = i1
+          Jv[master_ix] = i2
+          Vv[master_ix] = Bj[_i1+c_offset,_i2]
+          master_ix    += 1
+        end
+      end
+      c_offset += length(idxs_c)
+    end
+  end
+  sparse(Iv, Jv, Vv)
 end
 
