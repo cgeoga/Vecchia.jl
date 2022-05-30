@@ -92,8 +92,8 @@ the data**. Here is an example usage:
 S = Vecchia.precisionmatrix(vecc, sample_p)
 
 # Note that this is NOT given in the form of a sparse matrix, it is a custom
-struct with just two methods: U'*x and logdet(U), which is all you need to
-evaluate the likelihood. 
+# struct with just two methods: U'*x and logdet(U), which is all you need to
+# evaluate the likelihood. 
 U = Vecchia.rchol(vecc, sample_p)
 
 # If you want the sparse matrix (don't forget to wrap as UpperTriangular!):

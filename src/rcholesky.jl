@@ -32,6 +32,7 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
                             params::AbstractVector{T},
                             execmode=ThreadedEx()) where{H,D,F,T}
   @assert !strbuf.is_instantiated "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
+  strbuf.is_instantiated=true
   kernel  = V.kernel
   Z       = promote_type(H,T)
   cpts_sz = V.chunksize*V.blockrank
