@@ -240,7 +240,7 @@ function vec_of_vecs_to_matrows(vv)
   Matrix(reduce(hcat, vv)')
 end
 
-# For debugging. This gives M = U*U'.
+#= For debugging. This gives M = U*U'.
 function rchol(M)
   tmp = cholesky(Symmetric(reverse(Matrix(M), dims=(1,2)))).L
   UpperTriangular(reverse(Matrix(tmp), dims=(1,2)))
@@ -248,12 +248,13 @@ end
 
 # Again, for debugging. Don't use this.
 irchol(M) = inv(cholesky(M).U)
+=#
 
 function prepare_v_buf!(buf, v::Matrix, idxv)
   _ix = 1
   for ixs in idxv
     for ix in ixs
-      view(buf, _ix, :) .= view(v, ix, :)
+      @inbounds view(buf, _ix, :) .= view(v, ix, :)
       _ix += 1
     end
   end
@@ -264,7 +265,7 @@ function updateptsbuf!(ptbuf, ptvv, idxs)
   ix = 1
   for idx in idxs
     for pt in ptvv[idx]
-      ptbuf[ix] = pt
+      @inbounds ptbuf[ix] = pt
       ix += 1
     end
   end
@@ -284,7 +285,7 @@ function rchol_nnz(U::RCholesky{T}) where{T}
     tmp = 0
     len = length(U.idxs[j])
     for ix in ix_c
-      tmp += len*length(U.idxs[ix]) 
+      @inbounds tmp += len*length(U.idxs[ix]) 
     end
     tmp
   end

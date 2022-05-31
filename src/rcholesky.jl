@@ -32,7 +32,6 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
                             params::AbstractVector{T},
                             execmode=ThreadedEx()) where{H,D,F,T}
   @assert !strbuf.is_instantiated "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
-  strbuf.is_instantiated=true
   kernel  = V.kernel
   Z       = promote_type(H,T)
   cpts_sz = V.chunksize*V.blockrank
@@ -134,12 +133,12 @@ function SparseArrays.sparse(U::RCholesky{T}) where{T}
   for (j,ix) in enumerate(U.idxs)
     Dj = U.diagonals[j]
     sz = size(Dj, 1)
-    offset = ix[1]-1
+    @inbounds offset = ix[1]-1
     for col_ix in 1:sz
       for row_ix in 1:col_ix
-        Iv[master_ix] = row_ix+offset
-        Jv[master_ix] = col_ix+offset
-        Vv[master_ix] = Dj[row_ix, col_ix]
+        @inbounds Iv[master_ix] = row_ix+offset
+        @inbounds Jv[master_ix] = col_ix+offset
+        @inbounds Vv[master_ix] = Dj[row_ix, col_ix]
         master_ix    += 1
       end
     end
@@ -152,12 +151,12 @@ function SparseArrays.sparse(U::RCholesky{T}) where{T}
     Bj = U.odiagonals[j]
     c_offset = 0
     for ix_c_k in ix_c
-      idxs_c = U.idxs[ix_c_k]
+      @inbounds idxs_c = U.idxs[ix_c_k]
       for (_i1, i1) in enumerate(idxs_c)
         for (_i2, i2) in enumerate(U.idxs[j])
-          Iv[master_ix] = i1
-          Jv[master_ix] = i2
-          Vv[master_ix] = Bj[_i1+c_offset,_i2]
+          @inbounds Iv[master_ix] = i1
+          @inbounds Jv[master_ix] = i2
+          @inbounds Vv[master_ix] = Bj[_i1+c_offset,_i2]
           master_ix    += 1
         end
       end
