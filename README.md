@@ -41,7 +41,7 @@ const dat = randn(length(pts))
 
 # Create the VecchiaConfig: 
 # If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
-const chunksize = 64
+const chunksize = 10 
 const num_conditioning_chunks = 3
 const vecc = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
 
@@ -85,8 +85,8 @@ While it will almost always be faster to just evaluated the likelihood with
 `Vecchia.nll(cfg, params)`, you *can* actually obtain the precision matrix `S`
 such that `Vecchia.nll(cfg, params) == -logdet(S) + dot(data, S, data)`. You can
 *also* obtain the upper triangular matrix `U` such that `S = U*U'`. **Note that
-these objects use permuted data, though, not the ordering in which you provided
-the data**. Here is an example usage:
+these objects correspond to permuted data, though, not the ordering in which you
+provided the data**. Here is an example usage:
 ```julia
 # using the VecchiaConfig called vecc that was created above:
 S = Vecchia.precisionmatrix(vecc, sample_p)
