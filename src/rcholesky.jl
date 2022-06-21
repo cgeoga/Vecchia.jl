@@ -23,7 +23,7 @@ function RCholesky_alloc(V::AbstractVecchiaConfig{H,D,F}, T) where{H,D,F}
     c_size = sum(k->length(V.pts[k]), cj)
     zeros(T, c_size, szs[j])
   end
-  RCholesky{T}(diags, odiags, V.condix, globalidxs(V.pts), false) 
+  RCholesky{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
@@ -31,7 +31,9 @@ end
 function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
                             params::AbstractVector{T},
                             execmode=ThreadedEx()) where{H,D,F,T}
-  @assert !strbuf.is_instantiated "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
+  checkthreads()
+  @assert !strbuf.is_instantiated[] "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
+  strbuf.is_instantiated[] = true
   kernel  = V.kernel
   Z       = promote_type(H,T)
   cpts_sz = V.chunksize*V.blockrank
@@ -94,7 +96,14 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
 end
 
 function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}; 
-               execmode=ThreadedEx()) where{H,D,F,T}
+               execmode=ThreadedEx(), issue_warning=true) where{H,D,F,T}
+  if issue_warning
+    @warn "Note that this is the reverse Cholesky factor for your data enumerated \
+    according to the permutation of the VecchiaConfig structure, so if you plan to \
+    apply this to vectors be sure to be mindful of potentially re-permuting. \
+    The simplest way to permute your data correct is with reduce(vcat, \
+    my_config.data). You can turn this warning off with the issue_warning kwarg." maxlog=1
+  end
   out = RCholesky_alloc(V, T)
   rchol_instantiate!(out, V, params, execmode)
   out

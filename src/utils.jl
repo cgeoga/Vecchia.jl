@@ -1,4 +1,16 @@
 
+function checkthreads()
+  nthr = Threads.nthreads()
+  if nthr > 1 && BLAS.get_num_threads() > 1
+    @warn "It looks like you started Julia with multiple threads but are also using \
+    multiple BLAS threads. The Julia multithreading isn't composable with BLAS \
+    multithreading, so you should probably choose one or the other. You can set \
+    BLAS threading off with BLAS.set_num_threads(1). Alternatively, you can turn \
+    off the Vecchia.jl multi-threading by passing FLoops.SequentialEx() as a kwarg \
+    to Vecchia.nll and co. as execmode=Vecchia.FLoops.SequentialEx()." maxlog=1
+  end
+end
+
 # A hacky function to return an empty Int64[] for the first conditioning set.
 @inline cond_ixs(j, r) = j == 1 ? Int64[] : collect(max(1,j-r):max(1,j-1))
 
@@ -290,5 +302,13 @@ function rchol_nnz(U::RCholesky{T}) where{T}
     tmp
   end
   out
+end
+
+function debug_exactnll(cfg, params)
+  pts = reduce(vcat, cfg.pts)
+  dat = reduce(vcat, cfg.data)
+  S   = Symmetric([cfg.kernel(x,y,params) for x in pts, y in pts])
+  Sf  = cholesky!(S)
+  (logdet(Sf), sum(z->z^2, Sf.U'\dat))
 end
 

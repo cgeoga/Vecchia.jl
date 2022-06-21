@@ -102,6 +102,9 @@ U_SparseMatrixCSC = UpperTriangular(sparse(U))
 # Here is how I'd recommend getting your data in the correct permutation out:
 data_perm = reduce(vcat, vecc.data)
 ```
+You'll get a warning the first time you call `rchol` or `precisionmatrix`
+re-iterating the issue about permutations. If you want to avoid that, you can
+pass in the kwarg `issue_warning=false`.
 
 ## SIMD via `LoopVectorization.jl`
 

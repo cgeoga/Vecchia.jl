@@ -18,10 +18,10 @@ end
 
 function Base.display(V::VecchiaConfig)
   println("Vecchia configuration with:")
-  println("chunksize:  $(V.chunksize)")
-  println("block rank: $(V.blockrank)")
-  println("data size:  $(sum(x->size(x,1), V.data))")
-  println("nsamples:   $(size(V.data[1], 2))")
+  println("  - chunksize:  $(V.chunksize)")
+  println("  - block rank: $(V.blockrank)")
+  println("  - data size:  $(sum(x->size(x,1), V.data))")
+  println("  - nsamples:   $(size(V.data[1], 2))")
 end
 
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
@@ -50,7 +50,7 @@ struct RCholesky{T}
   odiagonals::Vector{Matrix{T}}
   condix::Vector{Vector{Int64}}
   idxs::Vector{UnitRange{Int64}} 
-  is_instantiated::Bool
+  is_instantiated::Vector{Bool}
 end
 
 # TODO (cg 2022/05/30 12:10): make this more information.

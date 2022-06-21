@@ -7,7 +7,16 @@
 # allocations from the parallel loop, which means pre_allocating for _sI, _sJ,
 # and _sV. Could potentially pre-allocate large enough buffers once, like with
 # workcc/workpp/workcp, but I'm not sure how that will interact with append!!.
-function precisionmatrix(V::VecchiaConfig{D,F}, params::Vector{T}) where{D,F,T}
+function precisionmatrix(V::VecchiaConfig{D,F}, params::Vector{T}; 
+                         issue_warning=true) where{D,F,T}
+  checkthreads()
+  if issue_warning
+    @warn "Note that this is the precision matrix for your data enumerated \
+    according to the permutation of the VecchiaConfig structure, so if you plan to \
+    apply this to vectors be sure to be mindful of potentially re-permuting. \
+    The simplest way to permute your data correct is with reduce(vcat, \
+    my_config.data). You can turn this warning off with the issue_warning kwarg." maxlog=1
+  end
   # Check that the conditioning set indices are sorted:
   checksorted(V)
   # Create master indices for sparse matrix stuff.

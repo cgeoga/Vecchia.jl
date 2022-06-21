@@ -50,6 +50,7 @@ end
 
 function nll(V::AbstractVecchiaConfig{H,D,F}, params::AbstractVector{T};
              memoize=false, execmode=ThreadedEx()) where{H,D,F,T}
+  checkthreads()
   kernel = memoize ? MemoizedKernel(V.kernel, V.pts[1][1], params) : V.kernel
   Z      = promote_type(H,T)
   chsz   = V.chunksize
