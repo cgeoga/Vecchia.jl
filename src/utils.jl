@@ -262,7 +262,7 @@ end
 irchol(M) = inv(cholesky(M).U)
 =#
 
-function prepare_v_buf!(buf, v::Matrix, idxv)
+function prepare_v_buf!(buf, v, idxv)
   _ix = 1
   for ixs in idxv
     for ix in ixs
