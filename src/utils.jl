@@ -312,3 +312,40 @@ function debug_exactnll(cfg, params)
   (logdet(Sf), sum(z->z^2, Sf.U'\dat))
 end
 
+function gpmaxlik_optimize(obj, init; kwargs...)
+  kwargsd = Dict(kwargs)
+  objgh = p -> begin
+    res = DiffResults.HessianResult(p)
+    ForwardDiff.hessian!(res, obj, p)
+    (DiffResults.value(res), DiffResults.gradient(res), DiffResults.hessian(res))
+  end
+  GPMaxlik.trustregion(obj, objgh, init; 
+                       dmax=get(kwargsd, :dmax, Float64(length(init))),
+                       dcut=get(kwargsd, :dcut, 1e-10),
+                       kwargsd...)
+end
+
+function vecchia_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
+  optimizer(p->Vecchia.nll(cfg, p), init; optimizer_kwargs...)
+end
+
+function exact_estimate_nugget(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
+  pts = reduce(vcat, cfg.pts)
+  dat = reduce(vcat, cfg.data)
+  # TODO (cg 2022/09/08 13:06): fix this in GPMaxlik.
+  @assert isone(size(dat, 2)) "GPMaxlik.gnll_forwarddiff does not presently work for multiple realizations."
+  vdat = vec(dat)
+  nugkernel = (x,y,p) -> cfg.kernel(x,y,p) + Float64(x==y)*p[end]
+  obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, nugkernel)
+  optimizer(obj, init; optimizer_kwargs...)
+end
+
+function exact_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
+  pts = reduce(vcat, cfg.pts)
+  dat = reduce(vcat, cfg.data)
+  # TODO (cg 2022/09/08 13:06): fix this in GPMaxlik.
+  @assert isone(size(dat, 2)) "GPMaxlik.gnll_forwarddiff does not presently work for multiple realizations."
+  vdat = vec(dat)
+  obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, cfg.kernel)
+  optimizer(obj, init; optimizer_kwargs...)
+end

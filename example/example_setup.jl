@@ -26,16 +26,3 @@ tru_parm = [3.0, 0.5]
 truK = Symmetric([kfn(x,y,tru_parm) for x in pts, y in pts])
 const sim = cholesky(truK).L*randn(StableRNG(123), sz)
 
-# Create a VecchiaConfig object. You are very much welcome to create your own
-# struct that is <:Vecchia.VecchiaConfig to do something more thoughtful for
-# your specific problem. The kdtree method included here is very general-use.
-# This object uses "chunks" of size 64, and the 3 nearest "chunk" neighbors.
-const vecc     = Vecchia.kdtreeconfig(sim, pts, 64, 3, kfn)
-const nys_vecc = Vecchia.nystrom_kdtreeconfig(sim, pts, 64, 3, kfn, 72)
-
-# A "Scalarized" VecchiaConfig object, which now means that the covariance
-# matrices will be assembled using SIMD, which can provide a serious speedup
-# that is completely independent of the speedup gained by threading.
-const vecc_s   = Vecchia.scalarize(vecc, kfn_scalar)
-
-

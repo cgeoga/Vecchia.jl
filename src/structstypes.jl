@@ -95,41 +95,6 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
                        kfun, dat_out, pts_out, condix)
 end
 
-# Even less good code, but here's a simple connection between Vecchia and the
-# H-matrix with global Nystrom that I've worked on earlier: add a single
-# collection of "global" points to the conditioning set of all subsequent
-# points. Pretty easy to do with a couple extra tree constructions.
-function nystrom_kdtreeconfig(data, pts, chunksize, blockrank, kfun, nys_size)
-  (data isa Vector) && return nystrom_kdtreeconfig(hcat(data), pts, chunksize, 
-                                                   blockrank, kfun, nys_size)
-  # Make a KDTree of the points with a certain leaf size
-  tree   = KDTree(pts, leafsize=chunksize)
-  _d     = Dict(zip(pts, eachrow(data)))
-  data_p = reshape(reduce(vcat, [_d[xj] for xj in tree.data]), :, size(data,2))
-  # Pick the "nystrom points" in the simplest way:
-  nys_inds = 1:div(length(pts), nys_size):length(pts)
-  nys_pts  = tree.data[nys_inds]
-  # now for the rest of the points, do the ordering above:
-  _cfg     = kdtreeconfig(data_p, tree.data[setdiff(1:length(pts), nys_inds)],
-            chunksize, blockrank, kfun)
-  # extract and modify the fields we actually want:
-  pts_out  = vcat([nys_pts], _cfg.pts)
-  nys_dat  = reshape(reduce(vcat, data_p[nys_inds]), :, size(data, 2))
-  dat_out  = pushfirst!(_cfg.data, nys_dat)
-  condix   = map(j->cond_ixs(j,blockrank), eachindex(pts_out))
-  for j in 2:length(condix)
-    cixj = condix[j]
-    if !in(1, cixj)
-      pushfirst!(cixj, 1)
-    end
-  end
-  (H,D,F) = (eltype(data), length(first(pts)), typeof(kfun))
-  VecchiaConfig{H, D,F}(min(chunksize+nys_size, length(first(pts_out))),
-                        min(blockrank+1, length(pts_out)),
-                        kfun, dat_out, pts_out, condix)
-end
-
-
 function scalarize(v::VecchiaConfig{H,D,F}, scalarized_kernel::G) where{H,D,F,G}
   scalarized_pts = map(x->reduce(vcat, x), v.pts)
   ScalarVecchiaConfig{H,D,G}(v.chunksize,
@@ -157,6 +122,4 @@ function (k::MemoizedKernel{F,T})(x, y, p) where{F,T}
     return _val
   end
 end
-
-
 
