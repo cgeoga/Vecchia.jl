@@ -18,8 +18,9 @@ screening can be significantly weakened by measurement noise (corresponding to a
 "nugget" in the spatial statistics terminology), for example, and so I highly
 recommend investigating whether or not you have reason to expect that your
 specific model exhibits screening to an acceptable degree. In some cases, like
-with measurement noise, there are several workarounds and some are pretty easy.
-But for some covariance functions screening really doesn't hold and so this
+with measurement noise, there are several workarounds and some are pretty easy
+(including one based on the EM algorithm that this package now offers).  But for
+some covariance functions screening really doesn't hold and so this
 approximation scheme may not perform well. This isn't something that the code
 can enforce, so user discretion is required.
 
@@ -43,21 +44,15 @@ const dat = randn(length(pts))
 # If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
 const chunksize = 10 
 const num_conditioning_chunks = 3
-const vecc = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
+const cfg = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
 
-# Now you can evaluate the likelihood:
-const sample_p = ones(2)
-Vecchia.nll(vecc, sample_p)
-
-# More interestingly, you can use AD very easily:
-using ForwardDiff
-obj(p) = Vecchia.nll(vecc, p)
-ForwardDiff.hessian(obj, sample_p)
+# Estimate like so, with the default optimizer being Ipopt and using autodiff
+# for all gradients and Hessians. TRUE Hessians are used in this estimation by
+# default, not expected Fisher matrices.
+const mle = vecchia_estimate(cfg, some_init)
 ```
 
-**See the example files for a complete demonstration of using `ForwardDiff`'s
-caching and the Ipopt optimizer for some seriously powerful and efficient
-maximum likelihood estimation.**
+**See the example files for a heavily commented demonstration.**
 
 The code is organized with modularity and user-specific applications in mind, so
 the primary way to interact with the approximation is to create a
@@ -78,6 +73,30 @@ painfully optimized generic log-likelihood, precision matrix, and sparse
 time.
 
 # Advanced Usage
+
+## Estimation with a nugget/measurement error
+
+As mentioned above, measurement error can really hurt the accuracy of these
+approximations. If your model is effectively given by `data(x) = good_gp(x) +
+iid_noise(x)`, where `good_gp` is something that screens well that you actually
+want to use Vecchia on and `iid_noise` has VARIANCE `eta^2`, then you can
+estimate all parameters, including `eta^2`, like so:
+```julia
+# importantly, your kernel function here should NOT include the nugget:
+cfg = Vecchia.kdtreeconfig(data, pts, chunksize, num_cond_chunks, kernel_no_nug)
+
+# draw some iid Rademacher vectors that are used in a stochastic trace
+# calculation in the estimation routine:
+saa = rand((-1.0, 1.0), n_data, n_saa)
+
+# Estimate. This object currently returns a lot of diagnostic information and at
+# some point you should expect me to clean this up a bit so you don't have to do
+# ugly reference to get your estimator.
+em_mle = em_estimate(cfg, [init_good_gp_params, init_eta^2], saa)[3][end]
+```
+This is of course too terse of a discussion here, but see the example file for
+more information and see also the [paper](https://arxiv.org/abs/2208.06877) for
+a lot more information. **If you use this method, please cite this paper**.
 
 ## Sparse precision matrix and ("reverse") Cholesky factors
 

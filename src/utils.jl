@@ -252,16 +252,6 @@ function vec_of_vecs_to_matrows(vv)
   Matrix(reduce(hcat, vv)')
 end
 
-#= For debugging. This gives M = U*U'.
-function rchol(M)
-  tmp = cholesky(Symmetric(reverse(Matrix(M), dims=(1,2)))).L
-  UpperTriangular(reverse(Matrix(tmp), dims=(1,2)))
-end
-
-# Again, for debugging. Don't use this.
-irchol(M) = inv(cholesky(M).U)
-=#
-
 function prepare_v_buf!(buf, v, idxv)
   _ix = 1
   for ixs in idxv
@@ -304,13 +294,19 @@ function rchol_nnz(U::RCholesky{T}) where{T}
   out
 end
 
-function debug_exactnll(cfg, params)
+function debug_exactnll(cfg, params, nugget=false)
   pts = reduce(vcat, cfg.pts)
   dat = reduce(vcat, cfg.data)
-  S   = Symmetric([cfg.kernel(x,y,params) for x in pts, y in pts])
+  buf = [cfg.kernel(x,y,params) for x in pts, y in pts]
+  if nugget
+    buf += params[end]*I
+  end
+  S   = Symmetric(buf)
   Sf  = cholesky!(S)
   (logdet(Sf), sum(z->z^2, Sf.U'\dat))
 end
+
+generic_nll(R::Diagonal, data)  = 0.5*(logdet(R) + dot(data, R\data))
 
 function gpmaxlik_optimize(obj, init; kwargs...)
   kwargsd = Dict(kwargs)
@@ -349,3 +345,4 @@ function exact_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...
   obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, cfg.kernel)
   optimizer(obj, init; optimizer_kwargs...)
 end
+

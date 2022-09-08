@@ -79,13 +79,14 @@ function em_refine(cfg, saa, init; verbose=true, kwargs...)
 end
 
 function vecchia_mle_withnugget(cfg, init, optimizer; optimizer_kwargs...)
-  nug_cfg = Vecchia.VecchiaConfig(cfg.chunksize, cfg.blockrank,
-                                (x,y,p)->cfg.kernel(x,y,p)+Float64(x==y)*p[end],
-                                cfg.data, cfg.pts, cfg.condix)
+  nugkernel = (x,y,p) -> cfg.kernel(x,y,p)+Float64(x==y)*p[end]
+  nug_cfg   = Vecchia.VecchiaConfig(cfg.chunksize, cfg.blockrank,
+                                    nugkernel, cfg.data, cfg.pts, cfg.condix)
   optimizer(p->Vecchia.nll(nug_cfg, p), init; optimizer_kwargs...)
 end
 
 function em_estimate(cfg, saa, init; 
+                     verbose=true,
                      optimizer=ipopt_optimize, 
                      norm2tol=1e-2,
                      max_em_iter=20,
@@ -96,21 +97,19 @@ function em_estimate(cfg, saa, init;
   please open an issue or PR or otherwise poke me (CG) somehow."
   # compute initial estimator using Vecchia with the nugget and nothing thoughtful:
   verbose && println("\nComputing initial MLE estimator using Vecchia with nugget...")
-  mle_withnugget = vecchia_mle_withnug(cfg, init, optimizer; optimizer_kwargs...)
+  mle_withnugget = vecchia_mle_withnugget(cfg, init, optimizer; optimizer_kwargs...)
   # check for success:
-  init_res = check_nuggetvecchia_result(mle_withnugget)
   if !in(mle_withnugget.status, (0,1))
     @warn "Trying to generate decent init with generic fallback defaults..."
-    mle_withnugget = vecchia_mle_withnug(cfg, vcat(init[1:(end-1)], 0.01), optimizer; 
+    mle_withnugget = vecchia_mle_withnugget(cfg, vcat(init[1:(end-1)], 0.01), optimizer; 
                                          optimizer_kwargs...)
-    init_res = check_nuggetvecchia_result(mle_withnugget)
     if !in(mle_withnugget.status, (0,1))
       @warn "Even with fallback inits, something went wrong generating the init. \
       Maybe you should check your model/code/data basic things again before continuing."
     end
   end
   # now use the iterator interface:
-  (init_result=init_res,
+  (init_result=mle_withnugget,
    em_refine(cfg, saa, mle_withnugget.minimizer; optimizer=optimizer, 
              verbose=verbose, optimizer_kwargs=optimizer_kwargs)...)
 end

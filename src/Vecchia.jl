@@ -11,7 +11,7 @@ module Vecchia
   using ForwardDiff
   using ForwardDiff.DiffResults
 
-  export nll, vecchia_estimate
+  export nll, vecchia_estimate, em_estimate
 
   include("structstypes.jl")
 
