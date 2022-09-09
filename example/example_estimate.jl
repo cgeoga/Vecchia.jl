@@ -10,7 +10,7 @@ const cfg = Vecchia.kdtreeconfig(sim, # your simulated data, a Matrix{Float64}.
                                  pts, # locations, a Vector{SVector{D,Float64}}.
                                  5,   # size of each leaf/prediction set.
                                  3,   # number of past leaves to condition on.
-                                 matern_nonug) 
+                                 matern) 
 
 # Now just compute the estimator and let autodiff and Ipopt take care of the rest!
 # Note that you can provide kwargs here for the optimizer. But if you're

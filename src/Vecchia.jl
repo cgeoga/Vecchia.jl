@@ -6,7 +6,7 @@ module Vecchia
   # faster, but it does really complicate the tree.
   using LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays
   using FLoops, BangBang, MicroCollections
-  using LoopVectorization 
+  #using LoopVectorization 
   using GPMaxlik, StandaloneIpopt
   using ForwardDiff
   using ForwardDiff.DiffResults

@@ -63,8 +63,8 @@ end
   quote
     if pts1 == pts2 && skipltri
       for _k in 0:div(length(pts2)-1,$D)
-        @turbo for _j in 0:_k # @turbo
-        #@inbounds for _j in 0:_k 
+        #@turbo for _j in 0:_k # @turbo
+        @inbounds for _j in 0:_k 
           val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
                      $([:(pts2[_k*$D+$d]) for d in 1:D]...),
                      params)
@@ -73,8 +73,8 @@ end
       end
     elseif pts1 == pts2 && !skipltri
       for _k in 0:div(length(pts2)-1,$D)
-        @turbo for _j in 0:_k # @turbo
-        #@inbounds for _j in 0:_k 
+        #@turbo for _j in 0:_k # @turbo
+        @inbounds for _j in 0:_k 
           val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
                      $([:(pts2[_k*$D+$d]) for d in 1:D]...),
                       params)
@@ -83,8 +83,8 @@ end
         end
       end
     else
-      @turbo for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) # @turbo
-      #@inbounds for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) 
+      #@turbo for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) # @turbo
+      @inbounds for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) 
         val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
                    $([:(pts2[_k*$D+$d]) for d in 1:D]...),
                     params)
@@ -198,11 +198,9 @@ function sunsteinchunk(T, n, solve, fccov, mulbuf,
   # but was significantly faster---by about a factor of 2.
   mul!(mulbuf, Adjoint(combined), combined)
   Vv  = Vector{T}(undef, ltrisz(length(combined_ixs)))
-  @turbo for l in eachindex(Iv, Jv)
-  #@inbounds for l in eachindex(Iv, Jv)
-    j     = Iv[l]
-    k     = Jv[l]
-    Vv[l] = mulbuf[j,k]
+  #@turbo for l in eachindex(Iv, Jv)
+  @simd for l in eachindex(Iv, Jv)
+    @inbounds Vv[l] = mulbuf[Iv[l],Jv[l]]
   end
   update_IJ!(combined_ixs, Iv, Jv)
   return (Iv, Jv, Vv)

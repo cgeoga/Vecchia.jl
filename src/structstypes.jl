@@ -96,6 +96,8 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
 end
 
 function scalarize(v::VecchiaConfig{H,D,F}, scalarized_kernel::G) where{H,D,F,G}
+  @warn "Due to some instability, all use of LoopVectorization.jl is temporarily \
+  disabled. So there is probably no reason for you to do this at the moment."
   scalarized_pts = map(x->reduce(vcat, x), v.pts)
   ScalarVecchiaConfig{H,D,G}(v.chunksize,
                              v.blockrank,

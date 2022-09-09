@@ -15,7 +15,7 @@ const cfg = Vecchia.kdtreeconfig(sim_nug, # your simulated data, a Matrix{Float6
                                  pts,     # locations, a Vector{SVector{D,Float64}}.
                                  1,       # size of each leaf/prediction set.
                                  5,       # number of past leaves to condition on.
-                                 matern_nonug) 
+                                 matern) 
 
 # Now let's try to estimate that, where note that the parameters now use an
 # extra value that gives the VARIANCE of the measurement noise.

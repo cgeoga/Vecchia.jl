@@ -51,7 +51,6 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
     if isone(j)
       # In this special case, I actually can skip the lower triangle. 
       updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
-      empty_dict = Dict{Tuple{Int64,Int64},Matrix{Z}}()
       cov_pp_f = cholesky!(Symmetric(cov_pp))
       buf      = strbuf.diagonals[1]
       ldiv!(cov_pp_f.U, buf)
