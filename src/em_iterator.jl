@@ -86,6 +86,7 @@ function vecchia_mle_withnugget(cfg, init, optimizer; optimizer_kwargs...)
 end
 
 function em_estimate(cfg, saa, init; 
+                     warn_optimizer=true,
                      verbose=true,
                      optimizer=ipopt_optimize, 
                      norm2tol=1e-2,
@@ -107,6 +108,14 @@ function em_estimate(cfg, saa, init;
       @warn "Even with fallback inits, something went wrong generating the init. \
       Maybe you should check your model/code/data basic things again before continuing."
     end
+  end
+  if optimizer==ipopt_optimize && warn_optimizer
+    @warn "Ipopt is the default optimizer here, but please note that for large \
+    problems a trust-region based method, such as KNITRO, can work much better. \
+    Since that software is neither gratis or libre Ipopt is the default, but if \
+    you are not happy with the performance you might even consider something like \
+    Optim.jl's NewtonTrustRegion solver or something. Feel free to open an issue \
+    to discuss more."
   end
   # now use the iterator interface:
   (init_result=mle_withnugget,
