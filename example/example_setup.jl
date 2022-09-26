@@ -1,13 +1,6 @@
 
 using LinearAlgebra, StaticArrays, StableRNGs, Vecchia, BesselK
 
-# scalar version for SIMD test:
-function matern_scalar(x1, x2, y1, y2, p)
-  xv = @SVector [x1, x2]
-  yv = @SVector [y1, y2]
-  matern(xv, yv, p)
-end
-
 # A generic function to simulate that gives back both the data with the noise
 # and without the noise, because there are two estimation examples that use
 # both. The function matern is courtesy of BesselK.jl.

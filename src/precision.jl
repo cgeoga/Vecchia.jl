@@ -20,7 +20,7 @@ function precisionmatrix(V::VecchiaConfig{D,F}, params::Vector{T};
   # Check that the conditioning set indices are sorted:
   checksorted(V)
   # Create master indices for sparse matrix stuff.
-  gixs = globalidxs(V.data)
+  gixs = globalidxs(V.pts)
   # create thread buffers for the matrices like in the nll function.
   n    = sum(length, V.pts)
   chsz = V.chunksize        # this probably should be computed more carefully.

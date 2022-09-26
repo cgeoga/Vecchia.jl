@@ -1,13 +1,27 @@
 
-include("../example/example_setup.jl")
+using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia, SparseArrays
 
-using Test, Vecchia, SparseArrays
+kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
+
+# scalar version for SIMD test:
+function kernel_scalar(x1, x2, y1, y2, p)
+  xv = @SVector [x1, x2]
+  yv = @SVector [y1, y2]
+  kernel(xv, yv, p)
+end
+
+# quick testing values:
+const rng    = StableRNG(123)
+const test_p = [0.1, 0.1]
+const pts    = rand(SVector{2,Float64}, 200)
+const saa    = rand(rng, (-1.0, 1.0), length(pts), 72)
+const sim    = randn(rng, length(pts))
 
 # Create a vecc object that uses enough block-conditioning points that the
 # likelihood evaluation is exact.
-const vecc       = Vecchia.kdtreeconfig(sim, pts, 5, 3, matern)
-const vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, matern)
-const vecc_s     = Vecchia.scalarize(vecc, matern_scalar)
+const vecc       = Vecchia.kdtreeconfig(sim, pts, 5, 3, kernel)
+const vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
+const vecc_s     = Vecchia.scalarize(vecc, kernel_scalar)
 
 # Test 1: nll gives the exact likelihood for a vecchia config where the
 # conditioning set is every prior point.
@@ -21,7 +35,7 @@ debug_nll    = Vecchia.exact_nll(vecc_exact, ones(3))
 println("testing precision...")
 pmat = Vecchia.precisionmatrix(vecc_exact, ones(3))
 ptsv = reduce(vcat, vecc_exact.pts)
-cmat = [matern(x,y,ones(3)) for x in ptsv, y in ptsv]
+cmat = [kernel(x,y,ones(3)) for x in ptsv, y in ptsv]
 @test maximum(abs, inv(Matrix(pmat))-cmat) < 1e-5
 
 # Test 3: the nll agrees with the one obtained with the Vecchia precision.
@@ -40,8 +54,8 @@ nonscalarized_nll = Vecchia.nll(vecc, ones(3))
 # single-data nlls.
 println("Testing multiple data nll...")
 const new_data  = range(0.0, 1.0, length=length(sim))
-const joint_cfg = Vecchia.kdtreeconfig(hcat(sim, new_data), pts, 5, 3, matern)
-const new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, matern)
+const joint_cfg = Vecchia.kdtreeconfig(hcat(sim, new_data), pts, 5, 3, kernel)
+const new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, kernel)
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
                Vecchia.nll(vecc, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
 

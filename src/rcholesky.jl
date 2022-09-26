@@ -14,15 +14,23 @@
 #    frequently end up working with expensive kernels, even. So worth doing.
 #
 
+function prepare_diagonal_chunks(::Val{T}, sizes) where{T}
+  map(sizes) do sz
+    UpperTriangular{T, Matrix{T}}(I(sz))
+  end
+end
+
+function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
+  map(enumerate(condix)) do (j,cj)
+    isempty(cj) ? zeros(T, 0, 0) : zeros(T, sum(k->sizes[k], cj), sizes[j])
+  end
+end
+
 # Just allocates all the memory for the struct. This does NOT fill in values.
 function RCholesky_alloc(V::AbstractVecchiaConfig{H,D,F}, T) where{H,D,F}
   szs    = map(length, V.pts)
-  diags  = map(sz->UpperTriangular(Matrix{T}(I(sz))), szs)
-  odiags = map(enumerate(V.condix)) do (j,cj)
-    isempty(cj) && return zeros(T, 0, 0)
-    c_size = sum(k->length(V.pts[k]), cj)
-    zeros(T, c_size, szs[j])
-  end
+  diags  = prepare_diagonal_chunks(Val(T), szs)
+  odiags = prepare_odiagonal_chunks(Val(T), V.condix, szs)
   RCholesky{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
