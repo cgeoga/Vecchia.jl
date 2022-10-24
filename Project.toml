@@ -1,7 +1,7 @@
 name = "Vecchia"
 uuid = "8d73829f-f4b0-474a-9580-cecc8e084068"
 authors = ["Chris Geoga <christopher.geoga@rutgers.edu>"]
-version = "0.7.3"
+version = "0.7.2"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
