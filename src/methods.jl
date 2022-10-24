@@ -121,6 +121,7 @@ function Base.:*(Ut::Adjoint{T,RCholesky{T}}, v::Matrix) where{T}
   bufm = Array{Z}(undef, maximum(length, U.idxs), size(v,2))
   apply!(out, Ut, v, bufv, bufm)
 end
+Base.:*(Ut::Adjoint{T,RCholesky{T}}, v::Vector) where{T} = vec(Ut*reshape(v, (length(v), 1)))
 
 function Base.:*(U::RCholesky{T}, v::Matrix) where{T}
   Z    = promote_type(T, eltype(v))
@@ -128,6 +129,7 @@ function Base.:*(U::RCholesky{T}, v::Matrix) where{T}
   bufv = Array{Z}(undef, maximum(length, U.condix)*maximum(length, U.idxs), size(v,2))
   apply!(out, U, v, bufv)
 end
+Base.:*(U::RCholesky{T}, v::Vector) where{T} = vec(Ut*reshape(v, (length(v), 1)))
 
 function apply_parallel(Ut::Adjoint{T,RCholesky{T}}, v::AbstractMatrix) where{T}
   U    = Ut.parent
