@@ -3,12 +3,13 @@ using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia, SparseArrays
 
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
 
-# scalar version for SIMD test:
+#= scalar version for SIMD test:
 function kernel_scalar(x1, x2, y1, y2, p)
   xv = @SVector [x1, x2]
   yv = @SVector [y1, y2]
   kernel(xv, yv, p)
 end
+=#
 
 # quick testing values:
 const rng    = StableRNG(123)
@@ -21,7 +22,7 @@ const sim    = randn(rng, length(pts))
 # likelihood evaluation is exact.
 const vecc       = Vecchia.kdtreeconfig(sim, pts, 5, 3, kernel)
 const vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
-const vecc_s     = Vecchia.scalarize(vecc, kernel_scalar)
+#const vecc_s     = Vecchia.scalarize(vecc, kernel_scalar)
 
 # Test 1: nll gives the exact likelihood for a vecchia config where the
 # conditioning set is every prior point.
@@ -45,10 +46,10 @@ pnll = Vecchia.nll_precision(pmat, datv)
 @test isapprox(pnll, debug_nll)
 
 # Test 4: the scalarized nll agrees with the non-scalarized one.
-println("Testing scalar nll...")
-scalarized_nll    = Vecchia.nll(vecc_s, ones(3))
-nonscalarized_nll = Vecchia.nll(vecc, ones(3))
-@test isapprox(scalarized_nll, nonscalarized_nll)
+#println("Testing scalar nll...")
+#scalarized_nll    = Vecchia.nll(vecc_s, ones(3))
+#nonscalarized_nll = Vecchia.nll(vecc, ones(3))
+#@test isapprox(scalarized_nll, nonscalarized_nll)
 
 # Test 5: the nll with multiple data sources agrees with the sum of two
 # single-data nlls.

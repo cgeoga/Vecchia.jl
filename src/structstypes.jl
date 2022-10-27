@@ -45,6 +45,25 @@ function Base.display(V::ScalarVecchiaConfig)
   println("nsamples:   $(size(V.data[1], 2))")
 end
 
+struct CondLogLikBuf{D,T}
+  buf_pp::Matrix{T}
+  buf_cp::Matrix{T}
+  buf_cc::Matrix{T}
+  buf_cdat::Matrix{T}
+  buf_mdat::Matrix{T}
+  buf_cpts::Vector{SVector{D,Float64}}
+end
+
+function cnllbuf(D, Z, ndata, cpts_sz, pts_sz)
+  buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
+  buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
+  buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
+  buf_cdat = Array{Z}(undef, cpts_sz, ndata)
+  buf_mdat = Array{Z}(undef,  pts_sz, ndata)
+  buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
+  CondLogLikBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
+end
+
 struct RCholesky{T}
   diagonals::Vector{UpperTriangular{T,Matrix{T}}}
   odiagonals::Vector{Matrix{T}}
@@ -96,8 +115,9 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
 end
 
 function scalarize(v::VecchiaConfig{H,D,F}, scalarized_kernel::G) where{H,D,F,G}
-  @warn "Due to some instability, all use of LoopVectorization.jl is temporarily \
-  disabled. So there is probably no reason for you to do this at the moment."
+  throw(error("Due to some instability, this functionality is not currently offered. \
+              Apologies about that. If you depended on this and the non-scalarized \
+              version doesn't work for you, please open an issue."))
   scalarized_pts = map(x->reduce(vcat, x), v.pts)
   ScalarVecchiaConfig{H,D,G}(v.chunksize,
                              v.blockrank,
@@ -124,4 +144,5 @@ function (k::MemoizedKernel{F,T})(x, y, p) where{F,T}
     return _val
   end
 end
+
 

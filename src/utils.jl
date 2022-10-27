@@ -272,6 +272,19 @@ function updateptsbuf!(ptbuf, ptvv, idxs)
   view(ptbuf, 1:(ix-1))
 end
 
+function updatedatbuf!(datbuf, datvm, idxs)
+  _start = 1
+  stop   = 0
+  for ix in idxs
+    dat_ix = datvm[ix]
+    sz_ix  = size(dat_ix, 1)
+    stop   = _start+sz_ix-1
+    view(datbuf, _start:stop, :) .= dat_ix
+    _start += sz_ix
+  end
+  view(datbuf, 1:stop, :)
+end
+
 # Not a clever function at all,
 function rchol_nnz(U::RCholesky{T}) where{T}
   # diagonal elements:
@@ -344,3 +357,11 @@ function exact_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...
   optimizer(obj, init; optimizer_kwargs...)
 end
 
+# for simple debugging and testing.
+function exact_nll(V::VecchiaConfig{H,D,F}, params::Vector{T}) where{H,D,T,F}
+  pts = reduce(vcat, V.pts)
+  dat = reduce(vcat, V.data)
+  buf = Array{T}(undef, length(pts), length(pts))
+  (ld, qf) = negloglik(V.kernel, params, pts, dat, buf)
+  0.5*(ld + qf)
+end
