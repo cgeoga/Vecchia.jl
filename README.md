@@ -36,19 +36,19 @@ kfn(x,y,p) = p[1]*exp(-norm(x-y)/p[2])*(1.0+norm(x-y)/p[2])
 
 # Locations for fake measurements, in this case 2048 of them, and fake data 
 # (data NOT from the correction distribution, this is just a maximally simple demo):
-const pts = [SVector{2, Float64}(randn(2)) for _ in 1:2048]
-const dat = randn(length(pts))
+pts = [SVector{2, Float64}(randn(2)) for _ in 1:2048]
+dat = randn(length(pts))
 
 # Create the VecchiaConfig: 
 # If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
-const chunksize = 10 
-const num_conditioning_chunks = 3
+chunksize = 10 
+num_conditioning_chunks = 3
 const cfg = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
 
 # Estimate like so, with the default optimizer being Ipopt and using autodiff
 # for all gradients and Hessians. TRUE Hessians are used in this estimation by
 # default, not expected Fisher matrices.
-const mle = vecchia_estimate(cfg, some_init)
+mle = vecchia_estimate(cfg, some_init)
 ```
 
 **See the example files for a heavily commented demonstration.**
