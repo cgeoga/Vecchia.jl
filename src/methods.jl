@@ -131,6 +131,9 @@ function Base.:*(U::RCholesky{T}, v::Matrix) where{T}
 end
 Base.:*(U::RCholesky{T}, v::Vector) where{T} = vec(U*reshape(v, (length(v), 1)))
 
+# TODO (cg 2022/10/31 12:26): Come back to this. Probably need to think a bit
+# harder about how to do this safely...
+#=
 function apply_parallel(Ut::Adjoint{T,RCholesky{T}}, v::AbstractMatrix) where{T}
   U    = Ut.parent
   Z    = promote_type(T, eltype(v))
@@ -155,4 +158,5 @@ function apply_parallel(Ut::Adjoint{T,RCholesky{T}}, v::AbstractMatrix) where{T}
   end
   out
 end
+=#
 

@@ -4,9 +4,8 @@ function checkthreads()
   if nthr > 1 && BLAS.get_num_threads() > 1
     @warn "It looks like you started Julia with multiple threads but are also using \
     multiple BLAS threads. The Julia multithreading isn't composable with BLAS \
-    multithreading, so you should probably choose one or the other. If you want to \
-    turn OFF the threading in this function, you could use the internal Vecchia.nll_floops \
-    with the kwarg execmode=SequentialEx()." maxlog=1
+    multithreading, so please run BLAS.set_num_threads(1) before executing this \
+    function." maxlog=1
   end
 end
 
@@ -24,7 +23,6 @@ ltrisz(n) = div(n*(n+1), 2)
 # nll function itself will be using threads, and in my benchmarking putting
 # threaded constructors here slows things down a bit and increases allocations.
 function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
-  (F <: MemoizedKernel) && (@assert hash(params) === kfun.phash "params for memoized kernel don't agree with provided params. This shouldn't happen and is a bug.")
   if pts1 == pts2 && skipltri
     for k in eachindex(pts2)
       ptk = pts2[k]
@@ -48,50 +46,6 @@ function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
     end
   end
   nothing
-end
-
-# This function works pretty differently: now we assume that the points have all
-# been catted together and that the kernel function takes entirely scalar
-# inputs. With this formatting, we can then actually use the SIMD tools of
-# LoopVectorization.jl and get some serious speedup.
-#
-# Very grateful to Chris Elrod (@elrod on discourse, @chriselrod on Github) for
-# the help in making this work.
-@generated function updatebuf_avx!(buf, ::Val{D}, pts1, pts2, 
-                                   kfun, params; skipltri=false) where{D}
-  quote
-    if pts1 == pts2 && skipltri
-      for _k in 0:div(length(pts2)-1,$D)
-        #@turbo for _j in 0:_k # @turbo
-        @inbounds for _j in 0:_k 
-          val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
-                     $([:(pts2[_k*$D+$d]) for d in 1:D]...),
-                     params)
-          buf[_j+1,_k+1] = val
-        end
-      end
-    elseif pts1 == pts2 && !skipltri
-      for _k in 0:div(length(pts2)-1,$D)
-        #@turbo for _j in 0:_k # @turbo
-        @inbounds for _j in 0:_k 
-          val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
-                     $([:(pts2[_k*$D+$d]) for d in 1:D]...),
-                      params)
-          buf[_j+1,_k+1] = val
-          buf[_k+1,_j+1] = val
-        end
-      end
-    else
-      #@turbo for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) # @turbo
-      @inbounds for  _k in 0:div(length(pts2)-1,$D),  _j in 0:div(length(pts1)-1,$D) 
-        val = kfun($([:(pts1[_j*$D+$d]) for d in 1:D]...),
-                   $([:(pts2[_k*$D+$d]) for d in 1:D]...),
-                    params)
-        buf[_j+1,_k+1] = val
-      end
-    end
-    nothing
-  end
 end
 
 # TODO (cg 2022/04/21 16:16): This is totally not good.

@@ -64,6 +64,21 @@ function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
   CondLogLikBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
 end
 
+struct CondRCholBuf{D,T}
+  buf_pp::Matrix{T}
+  buf_cp::Matrix{T}
+  buf_cc::Matrix{T}
+  buf_cpts::Vector{SVector{D,Float64}}
+end
+
+function crcholbuf(::Val{D}, ::Val{Z}, cpts_sz, pts_sz) where{D,Z}
+  buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
+  buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
+  buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
+  buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
+  CondRCholBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cpts)
+end
+
 struct RCholesky{T}
   diagonals::Vector{UpperTriangular{T,Matrix{T}}}
   odiagonals::Vector{Matrix{T}}
@@ -75,12 +90,6 @@ end
 # TODO (cg 2022/05/30 12:10): make this more information.
 Base.display(U::RCholesky{T}) where{T} = println("RCholesky{$T}")
 Base.display(Ut::Adjoint{T,RCholesky{T}}) where{T} = println("Adjoint{$T, RCholesky{$T}}")
-
-struct MemoizedKernel{F,T}
-  cache::Dict{Tuple{UInt64, UInt64},T}
-  phash::UInt64
-  kernel::F
-end
 
 # Not good code or anything. Just a quick and dirty way to make a Vecchia object
 # with a KD-tree to choose the conditioning points.
@@ -113,36 +122,4 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
                        min(blockrank, length(pts_out)),
                        kfun, dat_out, pts_out, condix)
 end
-
-function scalarize(v::VecchiaConfig{H,D,F}, scalarized_kernel::G) where{H,D,F,G}
-  throw(error("Due to some instability, this functionality is not currently offered. \
-              Apologies about that. If you depended on this and the non-scalarized \
-              version doesn't work for you, please open an issue."))
-  scalarized_pts = map(x->reduce(vcat, x), v.pts)
-  ScalarVecchiaConfig{H,D,G}(v.chunksize,
-                             v.blockrank,
-                             scalarized_kernel,
-                             v.data,
-                             scalarized_pts,
-                             v.condix)
-end
-
-function MemoizedKernel(f, sample_x, p)
-  f11 = f(sample_x, sample_x, p)
-  ph  = hash(p)
-  cache = Dict{Tuple{UInt64, UInt64},typeof(f11)}()
-  MemoizedKernel(cache, ph, f)
-end
-
-function (k::MemoizedKernel{F,T})(x, y, p) where{F,T}
-  _key = (hash(x), hash(y))
-  if haskey(k.cache, _key)
-    return k.cache[_key]
-  else
-    _val = k.kernel(x,y,p)
-    k.cache[_key] = _val
-    return _val
-  end
-end
-
 

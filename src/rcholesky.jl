@@ -27,7 +27,7 @@ function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
 end
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
-function RCholesky_alloc(V::AbstractVecchiaConfig{H,D,F}, T) where{H,D,F}
+function RCholesky_alloc(V::AbstractVecchiaConfig{H,D,F}, ::Val{T}) where{H,D,F,T}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(Val(T), szs)
   odiags = prepare_odiagonal_chunks(Val(T), V.condix, szs)
@@ -37,73 +37,72 @@ end
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
 # here. Maybe I can pre-allocate things for the BLAS calls, even?
 function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
-                            params::AbstractVector{T},
-                            execmode=ThreadedEx()) where{H,D,F,T}
+                            params::AbstractVector{T}, 
+                            ::Val{Z}, ::Val{N}) where{H,D,F,T,Z,N}
   checkthreads()
   @assert !strbuf.is_instantiated[] "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
   strbuf.is_instantiated[] = true
   kernel  = V.kernel
-  Z       = promote_type(H,T)
   cpts_sz = V.chunksize*V.blockrank
   pts_sz  = V.chunksize
   # allocate three buffers:
-  @floop execmode for j in 1:length(V.condix)
-    # allocate work buffers in the thread-safe way:
-    @init buf_pp  = Array{Z}(undef,  pts_sz,  pts_sz)
-    @init buf_cp  = Array{Z}(undef, cpts_sz,  pts_sz)
-    @init buf_cc  = Array{Z}(undef, cpts_sz, cpts_sz)
-    @init buf_pts = Array{SVector{D,Float64}}(undef, cpts_sz)
+  bufs = ntuple(j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz), N)
+  # do the main loop:
+  Threads.@threads for j in 1:length(V.condix)
+    # get the buffer for this thread:
+    tbuf = bufs[Threads.threadid()]
+    # get the data and points:
     pts = V.pts[j]
     dat = V.data[j]
-    cov_pp = view(buf_pp, 1:length(pts), 1:length(pts))
+    cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
     if isone(j)
       # In this special case, I actually can skip the lower triangle. 
       updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
       cov_pp_f = cholesky!(Symmetric(cov_pp))
       buf      = strbuf.diagonals[1]
       ldiv!(cov_pp_f.U, buf)
-      continue
+    else
+      # If j != 1, then I'm going to use an in-place mul! on this buffer, so I
+      # need to fill it all in.
+      updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
+      # prepare conditioning points:
+      idxs = V.condix[j]
+      cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
+      # prepare and fill in the matrix buffers pertaining to the cond.  points:
+      cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
+      cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
+      updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
+      updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
+      # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
+      # pieces, like the conditional covaraince of the prediction points. I
+      # acknowledge that this is a little hard to read, but it really nicely cuts
+      # out all the unnecessary allocations. If you do a manual check, you can
+      # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
+      cov_cc_f = cholesky!(Symmetric(cov_cc))
+      ldiv!(cov_cc_f.U', cov_cp)
+      mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(Z), one(Z))
+      ldiv!(cov_cc_f.U, cov_cp)
+      Djf = cholesky!(Symmetric(cov_pp))
+      # Update the struct buffers. Note that the diagonal elements are actually
+      # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
+      # hack of directly working with the data buffer backing the UpperTriangular
+      # wrapper, which is probably not really recommended, but it works.
+      #strbuf.odiagonals[j] .= Bt_chunks
+      strbuf.odiagonals[j] .= cov_cp
+      strbuf_Djf = strbuf.diagonals[j].data
+      ldiv!(Djf.U, strbuf_Djf)
+      # now update the block with the rmul!, being careful to now use the
+      # UpperTriangular matrix, NOT the raw buffer!
+      strbuf_Bt = strbuf.odiagonals[j]
+      strbuf_Bt .*= -one(Z)
+      rmul!(strbuf_Bt, strbuf.diagonals[j])
     end
-    # If j != 1, then I'm going to use an in-place mul! on this buffer, so I
-    # need to fill it all in.
-    updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
-    # prepare conditioning points:
-    idxs = V.condix[j]
-    cpts = updateptsbuf!(buf_pts, V.pts, idxs)
-    # prepare and fill in the matrix buffers pertaining to the cond.  points:
-    cov_cp = view(buf_cp, 1:length(cpts), 1:length(pts))
-    cov_cc = view(buf_cc, 1:length(cpts), 1:length(cpts))
-    updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
-    updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
-    # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
-    # pieces, like the conditional covaraince of the prediction points. I
-    # acknowledge that this is a little hard to read, but it really nicely cuts
-    # out all the unnecessary allocations. If you do a manual check, you can
-    # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
-    cov_cc_f = cholesky!(Symmetric(cov_cc))
-    ldiv!(cov_cc_f.U', cov_cp)
-    mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(Z), one(Z))
-    ldiv!(cov_cc_f.U, cov_cp)
-    Djf = cholesky!(Symmetric(cov_pp))
-    # Update the struct buffers. Note that the diagonal elements are actually
-    # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
-    # hack of directly working with the data buffer backing the UpperTriangular
-    # wrapper, which is probably not really recommended, but it works.
-    #strbuf.odiagonals[j] .= Bt_chunks
-    strbuf.odiagonals[j] .= cov_cp
-    strbuf_Djf = strbuf.diagonals[j].data
-    ldiv!(Djf.U, strbuf_Djf)
-    # now update the block with the rmul!, being careful to now use the
-    # UpperTriangular matrix, NOT the raw buffer!
-    strbuf_Bt = strbuf.odiagonals[j]
-    strbuf_Bt .*= -one(Z)
-    rmul!(strbuf_Bt, strbuf.diagonals[j])
   end
   nothing
 end
 
 function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}; 
-               execmode=ThreadedEx(), issue_warning=true) where{H,D,F,T}
+               issue_warning=true) where{H,D,F,T}
   if issue_warning
     @warn "Note that this is the reverse Cholesky factor for your data enumerated \
     according to the permutation of the VecchiaConfig structure, so if you plan to \
@@ -111,8 +110,12 @@ function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
     The simplest way to permute your data correct is with reduce(vcat, \
     my_config.data). You can turn this warning off with the issue_warning kwarg." maxlog=1
   end
-  out = RCholesky_alloc(V, T)
-  rchol_instantiate!(out, V, params, execmode)
+  # allocate:
+  out = RCholesky_alloc(V, Val(T))
+  # compute the out type and the number of threads to pass in as vals:
+  Z   = promote_type(H, T)
+  N   = Threads.nthreads()
+  rchol_instantiate!(out, V, params, Val(Z), Val(N))
   out
 end
 
@@ -121,9 +124,8 @@ function nll(U::RCholesky{T}, data::Matrix{Float64}) where{T}
 end
 
 # This is really just for debugging.
-function nll_rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}; 
-                   execmode=ThreadedEx()) where{H,D,F,T}
-  U    = rchol(V, params; execmode=execmode)
+function nll_rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
+  U    = rchol(V, params)
   data = reduce(vcat, V.data)
   nll(U, data)
 end
