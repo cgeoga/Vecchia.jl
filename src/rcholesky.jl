@@ -157,7 +157,7 @@ function SparseArrays.sparse(U::RCholesky{T}) where{T}
         @inbounds Iv[master_ix] = row_ix+offset
         @inbounds Jv[master_ix] = col_ix+offset
         @inbounds Vv[master_ix] = Dj[row_ix, col_ix]
-        master_ix    += 1
+        master_ix += 1
       end
     end
   end
@@ -175,7 +175,7 @@ function SparseArrays.sparse(U::RCholesky{T}) where{T}
           @inbounds Iv[master_ix] = i1
           @inbounds Jv[master_ix] = i2
           @inbounds Vv[master_ix] = Bj[_i1+c_offset,_i2]
-          master_ix    += 1
+          master_ix += 1
         end
       end
       c_offset += length(idxs_c)

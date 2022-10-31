@@ -15,3 +15,10 @@ circumstances.**
 
 CG (Sep 2022)
 
+# Update (Oct 31, 2022)
+
+The implementation in this code (the module `EMVecchia2`) is now pretty diverged
+from the implementation in `Vecchia.jl`, which now is even more efficient and
+uses O(1) memory w.r.t. data size. **There is absolutely no reason to use the
+code here unless you're trying to reproduce the exact results in the paper.**
+
