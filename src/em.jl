@@ -7,8 +7,8 @@ Compute Sig*(Sig + R)^{-1} z
 function prepare_z0_SR0(cfg, arg, data)
   n    = size(data, 1)
   s2   = arg[end]
-  S    = Vecchia.precisionmatrix(cfg, arg, issue_warning=false)
-  SR   = S + inv(s2)*I #Diagonal(fill(inv(s2), n))
+  U    = sparse(Vecchia.rchol(cfg, arg, issue_warning=false))
+  SR   = Symmetric(U*U' + inv(s2)*I) 
   SRf  = cholesky(SR, perm=1:n) # for now
   (SRf\(data./s2), SRf)
 end

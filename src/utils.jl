@@ -239,3 +239,12 @@ function augmented_em_cfg(V::VecchiaConfig{H,D,F}, z0, presolved_saa) where{H,D,
                                new_data, V.pts, V.condix)
 end
 
+function globalidxs(datavv)
+  (out, start) = (Vector{UnitRange{Int64}}(undef, length(datavv)), 1)
+  for (j, datvj) in enumerate(datavv)
+    len = size(datvj,1)
+    out[j] = start:(start+len-1)
+    start += len
+  end
+  out
+end
