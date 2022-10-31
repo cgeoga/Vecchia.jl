@@ -6,10 +6,9 @@ likelihood, which work very well in many settings and run in *linear complexity
 with data size* (assuming O(1) sized conditioning sets). As of now this is only
 implemented for mean-zero processes. Implemented with chunked observations
 instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB [1].
-Reasonably optimized for minimal allocations so that multithreading (via the
-excellent FLoops ecosystem) really works well while still being AD-compatible.
-**To my knowledge, this is the only program that offers true Hessians of Vecchia
-likelihoods.** 
+Reasonably optimized for minimal allocations so that multithreading  really
+works well while still being AD-compatible.  **To my knowledge, this is the only
+program that offers true Hessians of Vecchia likelihoods.** 
 
 The accuracy of Vecchia approximations depends on the *screening effect* [2],
 which can perhaps be considered as a substantially weakened Markovian-like
@@ -98,6 +97,13 @@ This is of course too terse of a discussion here, but see the example file for
 more information and see also the [paper](https://arxiv.org/abs/2208.06877) for
 a lot more information. **If you use this method, please cite this paper**.
 
+Additionally, the method for this works equally well for **any** perturbation
+whose covariance matrix admits a fast solve, although ideally also a fast
+log-determinant. The code here just isn't as general as it should be because I
+haven't needed to think carefully about the more general case in my own
+research. But if you need that functionality, open an issue or poke me in some
+other way and we can discuss getting you what you need.
+
 ## Sparse precision matrix and ("reverse") Cholesky factors
 
 While it will almost always be faster to just evaluated the likelihood with
@@ -105,11 +111,14 @@ While it will almost always be faster to just evaluated the likelihood with
 such that `Vecchia.nll(cfg, params) == -logdet(S) + dot(data, S, data)`. You can
 *also* obtain the upper triangular matrix `U` such that `S = U*U'`. **Note that
 these objects correspond to permuted data, though, not the ordering in which you
-provided the data**. Here is an example usage:
-```julia
-# using the VecchiaConfig called vecc that was created above:
-S = Vecchia.precisionmatrix(vecc, sample_p)
+provided the data**. 
 
+While this package originally offered both, the direct assembly of `U` is much
+simpler and in order to streamline this code I have removed the option to
+directly assemble `S` that used the different algorithm of Sun and Stein (2016). 
+
+Here is an example usage:
+```julia
 # Note that this is NOT given in the form of a sparse matrix, it is a custom
 # struct with just two methods: U'*x and logdet(U), which is all you need to
 # evaluate the likelihood. 
@@ -118,43 +127,15 @@ U = Vecchia.rchol(vecc, sample_p)
 # If you want the sparse matrix (don't forget to wrap as UpperTriangular!):
 U_SparseMatrixCSC = UpperTriangular(sparse(U))
 
+# If you want S back, for example:
+S = U_SparseMatrixCSC*U_SparseMatrixCSC'
+
 # Here is how I'd recommend getting your data in the correct permutation out:
 data_perm = reduce(vcat, vecc.data)
 ```
-You'll get a warning the first time you call `rchol` or `precisionmatrix`
-re-iterating the issue about permutations. If you want to avoid that, you can
-pass in the kwarg `issue_warning=false`.
-
-## SIMD via `LoopVectorization.jl`
-
-In some cases, for example with a sufficiently simple covariance function and a
-sufficiently advanced CPU, using SIMD can really speed up likelihood
-evaluations.  To take advantage of this, we need to change the format of the
-stored locations.  This is entirely abstracted away from the user and not your
-problem, but you will need to write a new version of your covariance function
-that takes all of the location coordinates as scalars. For example:
-```julia
-# Note that this is equal to kfn above, but instead of expecting x and y as
-# AbstractVector types (or anything where norm(x-y) works), now you pass in 
-# each component. 
-function kfn_scalar(x1, x2, y1, y2, p)
-  nrm = sqrt((x1-y1)^2 + (x2-y2)^2)
-  p[1]*exp(-nrm/p[2])*(1+nrm/p[2])
-end
-
-# We still need to keep track of the dimension information somehow, so for now
-# the fix is simply to construct the "scalarized" version from the normal version:
-const vecc_s   = Vecchia.scalarize(vecc, kfn_scalar)
-
-# With just that little bit of extra code, now this nll function call will use SIMD
-# to assemble the covariance matrices. On my computer with an intel i5-11600K, which
-# has the AVX-512 instruction set, this is a factor of two faster than the nll with
-# the standard VecchiaConfig struct. 
-Vecchia.nll(vecc_s, sample_p)
-```
-Much gratitude to Chris Elrod for helping me understand how to correctly use
-`@generated` functions to make the assembly functions efficient for arbitrary
-coordinate dimensions. And for creating `LoopVectorization.jl`, of course.
+You'll get a warning the first time you call `rchol` re-iterating the issue
+about permutations. If you want to avoid that, you can pass in the kwarg
+`issue_warning=false`.
 
 ## Expensive or Complicated Kernel Functions
 

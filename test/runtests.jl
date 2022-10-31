@@ -31,6 +31,7 @@ vecchia_nll  = nll(vecc_exact, ones(3))
 debug_nll    = Vecchia.exact_nll(vecc_exact, ones(3))
 @test isapprox(vecchia_nll, debug_nll)
 
+#=
 # Test 2: precisionmatrix gives the exact precision when it should....modulo
 # some numerical noise, which is a little bit higher than I would expect.
 println("testing precision...")
@@ -44,6 +45,7 @@ println("testing precision nll...")
 datv = reduce(vcat, vecc_exact.data)
 pnll = Vecchia.nll_precision(pmat, datv)
 @test isapprox(pnll, debug_nll)
+=#
 
 # Test 4: the scalarized nll agrees with the non-scalarized one.
 #println("Testing scalar nll...")
@@ -60,20 +62,23 @@ const new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, kernel)
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
                Vecchia.nll(vecc, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
 
+#=
 # Test 6: make sure that with multiple data the precision matrices are the same.
 println("Testing multiple data precision...")
 const pmat_1 = Vecchia.precisionmatrix(vecc, ones(3))
 const pmat_2 = Vecchia.precisionmatrix(joint_cfg, ones(3))
 @test isapprox(pmat_1, pmat_2)
+=#
 
 # Test 7: confirm that the rchol-based nll is equal to the standard nll.
 println("Testing rchol nll...")
 rchol_nll = Vecchia.nll_rchol(vecc, ones(3))
 @test isapprox(rchol_nll, Vecchia.nll(vecc, ones(3)))
 
+#=
 # Test 8: the same, but with the sparse cholesky version.
 println("Testing rchol and precision...")
 const _U = sparse(Vecchia.rchol(vecc, ones(3)))
 const _S = Symmetric(_U*_U')
 @test isapprox(rchol_nll, Vecchia.nll_precision(_S, datv))
-
+=#

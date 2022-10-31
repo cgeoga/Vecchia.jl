@@ -14,17 +14,15 @@ end
 
 function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   checkthreads()
-  Z = promote_type(H,T)
-  nthr = Threads.nthreads()
-  _nll(V, params, Val(nthr), Val(Z))
+  Z     = promote_type(H,T)
+  nthr  = Threads.nthreads()
+  ndata = size(V.data[1], 2)
+  (logdets, qforms) = _nll(V, params, Val(nthr), Val(Z))
+  (logdets*ndata + qforms)/2
 end
 
-# TODO (cg 2022/10/28 14:30): This still makes sort of a lot of allocations
-# (~850 with the example cfg used in ../examples/). The @code_warntype is all
-# blue, though, so I'm not sure where it's coming from. I feel like the stuff
-# inside the for loop should be entirely non-allocating.
 function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}, 
-              ::Val{N}, ::Val{Z})::Z where{H,D,F,T,N,Z}
+              ::Val{N}, ::Val{Z})::Tuple{Z,Z} where{H,D,F,T,N,Z}
   kernel  = V.kernel
   cpts_sz = V.chunksize*V.blockrank
   pts_sz  = V.chunksize
@@ -48,7 +46,7 @@ function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
     out_logdet[Threads.threadid()] += ldj
     out_qforms[Threads.threadid()] += qfj
   end
-  (sum(out_logdet)*ndata + sum(out_qforms))/2
+  sum(out_logdet), sum(out_qforms)
 end
 
 function cnll_str(V, idxs, strbuf::CondLogLikBuf{D,T}, pts, dat, params) where{D,T}
@@ -78,31 +76,23 @@ function cnll_str(V, idxs, strbuf::CondLogLikBuf{D,T}, pts, dat, params) where{D
   negloglik(cov_pp_cond.U, strbuf.buf_mdat)
 end
 
-function nll_floops(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
+function em_ejnll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
+                  y_minus_z0, presolved_saa_sumsq) where{H,D,F,T}
+  # Like with the normal nll function, this section handles the things that
+  # create type instability, and then passes them to _nll so that the function
+  # barrier means that everything _inside_ _nll, which we want to be fast and
+  # multithreaded, is stable and non-allocating.
   checkthreads()
-  Z = promote_type(H,T)
-  _nll_floops(V, params, Val(Z))
-end
-
-function _nll_floops(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}, 
-                     ::Val{Z})::Z where{H,D,F,T,Z}
-  kernel  = V.kernel
-  cpts_sz = V.chunksize*V.blockrank
-  pts_sz  = V.chunksize
-  ndata   = size(V.data[1], 2)
-  # handle the first index base case:
-  n0      = length(V.pts[1])
-  (ld0, qf0) = negloglik(kernel, params, V.pts[1], V.data[1], zeros(Z, n0, n0))
-  # Now do the main loop for the rest of the terms, which are all conditional nlls:
-  @floop ThreadedEx() for j in 2:length(V.condix)
-    @init tbuf = cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz)
-    pts  = V.pts[j]
-    dat  = V.data[j]
-    idxs = V.condix[j]
-    (ldj, qfj) = cnll_str(V, idxs, tbuf, pts, dat, params)
-    @reduce(out_logdet += ldj)
-    @reduce(out_qforms += qfj)
-  end
-  ((out_logdet+ld0)*ndata + sum(out_qforms+qf0))/2
+  Z     = promote_type(H,T)
+  nthr  = Threads.nthreads()
+  ndata = size(y_minus_z0, 2)
+  # compute the following terms:
+  #   nll(V, z0)
+  #   (2M)^{-1} sum_j \norm[2]{U(\params)^T v_j}^2, w/ v_j the pre-solved SAA.
+  (logdets, qforms) = _nll(V, params, Val(nthr), Val(Z))
+  out  = (logdets*ndata + qforms)/2
+  # add on the generic nll for the measurement noise and the trace term. Note
+  # that the sum of squares has already been divided by 2M.
+  out + (generic_nll(I*params[end], y_minus_z0) + presolved_saa_sumsq/params[end])
 end
 

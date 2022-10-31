@@ -6,7 +6,6 @@ module Vecchia
   # faster, but it does really complicate the tree.
   using LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays
   using FLoops, BangBang, MicroCollections
-  #using LoopVectorization 
   using GPMaxlik, StandaloneIpopt
   using ForwardDiff
   using ForwardDiff.DiffResults
@@ -20,8 +19,6 @@ module Vecchia
   include("utils.jl")
 
   include("nll.jl")
-
-  include("precision.jl")
 
   include("rcholesky.jl")
 
