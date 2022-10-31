@@ -4,10 +4,9 @@ function checkthreads()
   if nthr > 1 && BLAS.get_num_threads() > 1
     @warn "It looks like you started Julia with multiple threads but are also using \
     multiple BLAS threads. The Julia multithreading isn't composable with BLAS \
-    multithreading, so you should probably choose one or the other. You can set \
-    BLAS threading off with BLAS.set_num_threads(1). Alternatively, you can turn \
-    off the Vecchia.jl multi-threading by passing FLoops.SequentialEx() as a kwarg \
-    to Vecchia.nll and co. as execmode=Vecchia.FLoops.SequentialEx()." maxlog=1
+    multithreading, so you should probably choose one or the other. If you want to \
+    turn OFF the threading in this function, you could use the internal Vecchia.nll_floops \
+    with the kwarg execmode=SequentialEx()." maxlog=1
   end
 end
 

@@ -54,7 +54,7 @@ struct CondLogLikBuf{D,T}
   buf_cpts::Vector{SVector{D,Float64}}
 end
 
-function cnllbuf(D, Z, ndata, cpts_sz, pts_sz)
+function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
   buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
   buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
   buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
