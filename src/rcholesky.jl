@@ -48,54 +48,57 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
   # allocate three buffers:
   bufs = ntuple(j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz), N)
   # do the main loop:
-  Threads.@threads for j in 1:length(V.condix)
-    # get the buffer for this thread:
-    tbuf = bufs[Threads.threadid()]
-    # get the data and points:
-    pts = V.pts[j]
-    dat = V.data[j]
-    cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
-    if isone(j)
-      # In this special case, I actually can skip the lower triangle. 
-      updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
-      cov_pp_f = cholesky!(Symmetric(cov_pp))
-      buf      = strbuf.diagonals[1]
-      ldiv!(cov_pp_f.U, buf)
-    else
-      # If j != 1, then I'm going to use an in-place mul! on this buffer, so I
-      # need to fill it all in.
-      updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
-      # prepare conditioning points:
-      idxs = V.condix[j]
-      cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
-      # prepare and fill in the matrix buffers pertaining to the cond.  points:
-      cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
-      cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
-      updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
-      updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
-      # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
-      # pieces, like the conditional covaraince of the prediction points. I
-      # acknowledge that this is a little hard to read, but it really nicely cuts
-      # out all the unnecessary allocations. If you do a manual check, you can
-      # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
-      cov_cc_f = cholesky!(Symmetric(cov_cc))
-      ldiv!(cov_cc_f.U', cov_cp)
-      mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(Z), one(Z))
-      ldiv!(cov_cc_f.U, cov_cp)
-      Djf = cholesky!(Symmetric(cov_pp))
-      # Update the struct buffers. Note that the diagonal elements are actually
-      # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
-      # hack of directly working with the data buffer backing the UpperTriangular
-      # wrapper, which is probably not really recommended, but it works.
-      #strbuf.odiagonals[j] .= Bt_chunks
-      strbuf.odiagonals[j] .= cov_cp
-      strbuf_Djf = strbuf.diagonals[j].data
-      ldiv!(Djf.U, strbuf_Djf)
-      # now update the block with the rmul!, being careful to now use the
-      # UpperTriangular matrix, NOT the raw buffer!
-      strbuf_Bt = strbuf.odiagonals[j]
-      strbuf_Bt .*= -one(Z)
-      rmul!(strbuf_Bt, strbuf.diagonals[j])
+  m = cld(length(V.condix), Threads.nthreads())
+  @sync for (i, chunk) in enumerate(Iterators.partition(1:length(V.condix), m))
+    Threads.@spawn for j in chunk
+      # get the buffer for this thread:
+      tbuf = bufs[i]
+      # get the data and points:
+      pts = V.pts[j]
+      dat = V.data[j]
+      cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
+      if isone(j)
+        # In this special case, I actually can skip the lower triangle. 
+        updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
+        cov_pp_f = cholesky!(Symmetric(cov_pp))
+        buf      = strbuf.diagonals[1]
+        ldiv!(cov_pp_f.U, buf)
+      else
+        # If j != 1, then I'm going to use an in-place mul! on this buffer, so I
+        # need to fill it all in.
+        updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
+        # prepare conditioning points:
+        idxs = V.condix[j]
+        cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
+        # prepare and fill in the matrix buffers pertaining to the cond.  points:
+        cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
+        cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
+        updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
+        updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
+        # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
+        # pieces, like the conditional covaraince of the prediction points. I
+        # acknowledge that this is a little hard to read, but it really nicely cuts
+        # out all the unnecessary allocations. If you do a manual check, you can
+        # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
+        cov_cc_f = cholesky!(Symmetric(cov_cc))
+        ldiv!(cov_cc_f.U', cov_cp)
+        mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(Z), one(Z))
+        ldiv!(cov_cc_f.U, cov_cp)
+        Djf = cholesky!(Symmetric(cov_pp))
+        # Update the struct buffers. Note that the diagonal elements are actually
+        # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
+        # hack of directly working with the data buffer backing the UpperTriangular
+        # wrapper, which is probably not really recommended, but it works.
+        #strbuf.odiagonals[j] .= Bt_chunks
+        strbuf.odiagonals[j] .= cov_cp
+        strbuf_Djf = strbuf.diagonals[j].data
+        ldiv!(Djf.U, strbuf_Djf)
+        # now update the block with the rmul!, being careful to now use the
+        # UpperTriangular matrix, NOT the raw buffer!
+        strbuf_Bt = strbuf.odiagonals[j]
+        strbuf_Bt .*= -one(Z)
+        rmul!(strbuf_Bt, strbuf.diagonals[j])
+      end
     end
   end
   nothing

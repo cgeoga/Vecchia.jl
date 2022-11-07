@@ -36,15 +36,22 @@ function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
   out_qforms  = zeros(Z, N)
   out_logdet[1] = ld0
   out_qforms[1] = qf0
-  # Now do the main loop for the rest of the terms, which are all conditional nlls:
-  Threads.@threads for j in 2:length(V.condix)
-    tbuf = bufs[Threads.threadid()]
-    pts  = V.pts[j]
-    dat  = V.data[j]
-    idxs = V.condix[j]
-    (ldj, qfj) = cnll_str(V, idxs, tbuf, pts, dat, params)
-    out_logdet[Threads.threadid()] += ldj
-    out_qforms[Threads.threadid()] += qfj
+  # Now do the main loop for the rest of the terms, which are all conditional nlls.
+  # Note that I'm not just using Threads.@threads for [...] and then getting
+  # buffers with bufs[Threads.threadid()], because this has the potential for
+  # some soundness issues. Further reading:
+  # https://discourse.julialang.org/t/behavior-of-threads-threads-for-loop/76042
+  m = cld(length(V.condix)-1, Threads.nthreads())
+  @sync for (i, chunk) in enumerate(Iterators.partition(2:length(V.condix), m))
+    Threads.@spawn for j in chunk
+      tbuf = bufs[i]
+      pts  = V.pts[j]
+      dat  = V.data[j]
+      idxs = V.condix[j]
+      (ldj, qfj) = cnll_str(V, idxs, tbuf, pts, dat, params)
+      out_logdet[i] += ldj
+      out_qforms[i] += qfj
+    end
   end
   sum(out_logdet), sum(out_qforms)
 end
