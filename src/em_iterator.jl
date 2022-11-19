@@ -50,8 +50,7 @@ function Base.iterate(it::EMVecchiaIterable{H,D,F}, iteration::Int=0) where{H,D,
   newstep = em_step(it.cfg, it.step_new, it.saa, it.optimizer; it.optimizer_kwargs...)
   # Check for bad returns:
   if !in(newstep.status, (0,1)) 
-    @warn "Optimizer failed to converge and returned status $(newstep.status), \
-    not killing the job but proceed with caution."
+    @warn "Optimizer failed to converge and returned status $(newstep.status), not killing the job but proceed with caution."
   end
   it.step_old .= it.step_new
   it.step_new .= newstep.minimizer
@@ -92,10 +91,7 @@ function em_estimate(cfg, saa, init;
                      norm2tol=1e-2,
                      max_em_iter=20,
                      optimizer_kwargs=())
-  @warn "In the notation of the paper introducing this method, this code currently \
-  only supports R = η^2 I, where the last parameter in your vector is η^2 directly. \
-  Support for more generic R matrices is easy and incoming, but if you need it now \
-  please open an issue or PR or otherwise poke me (CG) somehow."
+  @warn "In the notation of the paper introducing this method, this code currently only supports R = η^2 I, where the last parameter in your vector is η^2 directly. Support for more generic R matrices is easy and incoming, but if you need it now please open an issue or PR or otherwise poke me (CG) somehow."
   # compute initial estimator using Vecchia with the nugget and nothing thoughtful:
   verbose && println("\nComputing initial MLE estimator using Vecchia with nugget...")
   mle_withnugget = vecchia_mle_withnugget(cfg, init, optimizer; optimizer_kwargs...)
@@ -105,17 +101,11 @@ function em_estimate(cfg, saa, init;
     mle_withnugget = vecchia_mle_withnugget(cfg, vcat(init[1:(end-1)], 0.01), optimizer; 
                                          optimizer_kwargs...)
     if !in(mle_withnugget.status, (0,1))
-      @warn "Even with fallback inits, something went wrong generating the init. \
-      Maybe you should check your model/code/data basic things again before continuing."
+      @warn "Even with fallback inits, something went wrong generating the init. Maybe you should check your model/code/data basic things again before continuing."
     end
   end
   if optimizer==ipopt_optimize && warn_optimizer
-    @warn "Ipopt is the default optimizer here, but please note that for large \
-    problems a trust-region based method, such as KNITRO, can work much better. \
-    Since that software is neither gratis or libre Ipopt is the default, but if \
-    you are not happy with the performance you might even consider something like \
-    Optim.jl's NewtonTrustRegion solver or something. Feel free to open an issue \
-    to discuss more."
+    @warn "Ipopt is the default optimizer here, but please note that for large problems a trust-region based method, such as KNITRO, can work much better. Since that software is neither gratis or libre Ipopt is the default, but if you are not happy with the performance you might even consider something like Optim.jl's NewtonTrustRegion solver or something. Feel free to open an issue to discuss more."
   end
   # now use the iterator interface:
   (init_result=mle_withnugget,

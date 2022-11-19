@@ -107,11 +107,7 @@ end
 function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}; 
                issue_warning=true) where{H,D,F,T}
   if issue_warning
-    @warn "Note that this is the reverse Cholesky factor for your data enumerated \
-    according to the permutation of the VecchiaConfig structure, so if you plan to \
-    apply this to vectors be sure to be mindful of potentially re-permuting. \
-    The simplest way to permute your data correct is with reduce(vcat, \
-    my_config.data). You can turn this warning off with the issue_warning kwarg." maxlog=1
+    @warn "Note that this is the reverse Cholesky factor for your data enumerated according to the permutation of the VecchiaConfig structure, so if you plan to apply this to vectors be sure to be mindful of potentially re-permuting. The simplest way to permute your data correct is with reduce(vcat, my_config.data). You can turn this warning off with the issue_warning kwarg." maxlog=1
   end
   # allocate:
   out = RCholesky_alloc(V, Val(T))

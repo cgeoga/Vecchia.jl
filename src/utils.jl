@@ -2,10 +2,7 @@
 function checkthreads()
   nthr = Threads.nthreads()
   if nthr > 1 && BLAS.get_num_threads() > 1
-    @warn "It looks like you started Julia with multiple threads but are also using \
-    multiple BLAS threads. The Julia multithreading isn't composable with BLAS \
-    multithreading, so please run BLAS.set_num_threads(1) before executing this \
-    function." maxlog=1
+    @warn "It looks like you started Julia with multiple threads but are also using multiple BLAS threads. The Julia multithreading isn't composable with BLAS multithreading, so please run BLAS.set_num_threads(1) before executing this function." maxlog=1
   end
 end
 
