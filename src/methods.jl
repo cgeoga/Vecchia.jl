@@ -113,6 +113,8 @@ function applyUUt(U::RCholesky{T}, v::Matrix) where{Z,T}
   applyUUt!(bufs, U, v)
 end
 
+applyUUt(U::RCholesky{T}, v::Vector) where{Z,T} = vec(applyUUt(U, reshape(v, (length(v), 1))))
+
 function Base.:*(Ut::Adjoint{T,RCholesky{T}}, v::Matrix) where{T}
   Z    = promote_type(T, eltype(v))
   U    = Ut.parent
