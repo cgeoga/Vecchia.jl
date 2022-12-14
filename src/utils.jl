@@ -1,4 +1,8 @@
 
+_square(x::Real) = x*x
+
+_mean(x) = sum(x)/length(x)
+
 function checkthreads()
   nthr = Threads.nthreads()
   if nthr > 1 && BLAS.get_num_threads() > 1
@@ -114,7 +118,7 @@ function debug_exactnll(cfg, params, nugget=false)
   end
   S   = Symmetric(buf)
   Sf  = cholesky!(S)
-  (logdet(Sf), sum(z->z^2, Sf.U'\dat))
+  (logdet(Sf), sum(_square, Sf.U'\dat))
 end
 
 generic_nll(R::Diagonal, data)  = 0.5*(logdet(R) + dot(data, R\data))
@@ -123,7 +127,7 @@ function generic_nll(R::UniformScaling, data)
   n  = size(data, 1)
   m  = size(data, 2)
   ld = n*log(R.λ)
-  qf = sum(t->(t^2)/R.λ, data)
+  qf = sum(_square, data)/R.λ
   (m*ld + qf)/2
 end
 
@@ -141,7 +145,8 @@ function gpmaxlik_optimize(obj, init; kwargs...)
 end
 
 function vecchia_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
-  optimizer(p->Vecchia.nll(cfg, p), init; optimizer_kwargs...)
+  likelihood = WrappedLogLikelihood(cfg)
+  optimizer(likelihood, init; optimizer_kwargs...)
 end
 
 function exact_estimate_nugget(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
@@ -150,7 +155,7 @@ function exact_estimate_nugget(cfg, init; optimizer=ipopt_optimize, optimizer_kw
   # TODO (cg 2022/09/08 13:06): fix this in GPMaxlik.
   @assert isone(size(dat, 2)) "GPMaxlik.gnll_forwarddiff does not presently work for multiple realizations."
   vdat = vec(dat)
-  nugkernel = (x,y,p) -> cfg.kernel(x,y,p) + Float64(x==y)*p[end]
+  nugkernel = NuggetKernel(cfg.kernel)
   obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, nugkernel)
   optimizer(obj, init; optimizer_kwargs...)
 end

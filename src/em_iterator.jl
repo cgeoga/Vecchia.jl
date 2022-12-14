@@ -11,6 +11,14 @@ struct EMVecchiaIterable{H,D,F,O,K}
   optimizer_kwargs::K
 end
 
+struct NuggetKernel{K} <: Function
+  kernel::K
+end
+
+function (k::NuggetKernel{K})(x, y, p) where{K}
+  k.kernel(x,y,p)+Float64(x==y)*p[end]
+end
+
 function Base.display(M::EMVecchiaIterable{H,D,F}) where{H,D,F}
   display(M.cfg)
   println("EM with:")
@@ -78,10 +86,11 @@ function em_refine(cfg, saa, init; verbose=true, kwargs...)
 end
 
 function vecchia_mle_withnugget(cfg, init, optimizer; optimizer_kwargs...)
-  nugkernel = (x,y,p) -> cfg.kernel(x,y,p)+Float64(x==y)*p[end]
+  nugkernel = NuggetKernel(cfg.kernel) 
   nug_cfg   = Vecchia.VecchiaConfig(cfg.chunksize, cfg.blockrank,
                                     nugkernel, cfg.data, cfg.pts, cfg.condix)
-  optimizer(p->Vecchia.nll(nug_cfg, p), init; optimizer_kwargs...)
+  likelihood = WrappedLogLikelihood(nug_cfg)
+  optimizer(likelihood, init; optimizer_kwargs...)
 end
 
 function em_estimate(cfg, saa, init; 

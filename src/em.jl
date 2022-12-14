@@ -1,4 +1,19 @@
 
+# Putting the struct here instead of in structstypes.jl as a violation of my own
+# stye rules. It just only gets used here. Maybe there is a lesson about how to
+# organize code in this choice somewhere...
+struct ExpectedJointNll{C} <: Function
+  cfg::C
+  data_minus_z0::Matrix{Float64}
+  presolved_saa_sumsq::Float64
+end
+
+# Trying to move to callable structs instead of closures so that the
+# precompilation can be better...
+function (E::ExpectedJointNll{C})(p) where{C}
+  em_ejnll(E.cfg, p, E.data_minus_z0, E.presolved_saa_sumsq)
+end
+
 """
 prepare_z0_SR0(cfg::VecchiaConfig, arg::AbstractVector) -> (z0, SR0)
 
@@ -24,7 +39,7 @@ function em_step(cfg, arg, saa, optimizer; optimizer_kwargs...)
   # tr(M*M^T), where M=U'*(PtL)^{-T}. So that's what the pre-solve is here.
   divisor = sqrt(size(saa,2))
   pre_sf_solved_saa = (SR0f.PtL'\saa)./divisor
-  pre_sf_solved_saa_sumsq = sum(z->z^2, pre_sf_solved_saa)/2
+  pre_sf_solved_saa_sumsq = sum(_square, pre_sf_solved_saa)/2
   # Now, unlike the v1 version, create a NEW configuration where the "data"
   # field is actually hcat(z0, pre_sf_solved_saa./sqrt(2*M)). This division is
   # important because the qform calculator in Vecchia.nll doesn't know which
@@ -33,7 +48,7 @@ function em_step(cfg, arg, saa, optimizer; optimizer_kwargs...)
   tmp_cfg = augmented_em_cfg(cfg, z0, pre_sf_solved_saa)
   # create the closure that evaluates the expected joint nll:
   dat_minus_z0 = dat-z0
-  ejnll = p -> em_ejnll(tmp_cfg, p, dat_minus_z0, pre_sf_solved_saa_sumsq)
+  ejnll = ExpectedJointNll(tmp_cfg, dat_minus_z0, pre_sf_solved_saa_sumsq)
   optimizer(ejnll, arg; optimizer_kwargs...)
 end
 

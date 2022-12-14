@@ -3,6 +3,12 @@ const PrecisionPiece{T} = Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
 
 abstract type AbstractVecchiaConfig{H,D,F} end
 
+struct WrappedLogLikelihood{C} <: Function
+  cfg::C
+end
+
+(w::WrappedLogLikelihood{C})(p) where{C} = Vecchia.nll(w.cfg, p)
+
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
 # And having them sort of provides a dangerously easy option to not check and
@@ -108,7 +114,7 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   # fine as-is, but just a note that there is some perf on the table here.
   dat_out = map(vec_of_vecs_to_matrows, Iterators.partition(data_p, chunksize))
   # re-order the centroids of THOSE leaves.
-  centroids = map(x->sum(x)/length(x), pts_out)
+  centroids = map(_mean, pts_out)
   c_ix_dict = Dict(zip(centroids, eachindex(centroids)))
   c_tree    = KDTree(centroids)
   perm      = [c_ix_dict[x] for x in c_tree.data]
@@ -116,7 +122,7 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   pts_out   = pts_out[perm]
   dat_out   = dat_out[perm]
   # Create the conditioning meta-indices for the chunks.
-  condix  = map(j->cond_ixs(j,blockrank), eachindex(pts_out))
+  condix  = [cond_ixs(j,blockrank) for j in eachindex(pts_out)]
   (H,D,F) = (eltype(data), length(first(pts)), typeof(kfun))
   VecchiaConfig{H,D,F}(min(chunksize, length(first(pts_out))),
                        min(blockrank, length(pts_out)),

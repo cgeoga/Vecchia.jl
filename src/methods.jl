@@ -108,12 +108,12 @@ function applyUt(U::RCholesky{T}, v) where{T}
   apply!(out, U', v, bufv, bufm)
 end
 
-function applyUUt(U::RCholesky{T}, v::Matrix) where{Z,T}
+function applyUUt(U::RCholesky{T}, v::Matrix) where{T}
   bufs = RCholApplicationBuffer(U, v)
   applyUUt!(bufs, U, v)
 end
 
-applyUUt(U::RCholesky{T}, v::Vector) where{Z,T} = vec(applyUUt(U, reshape(v, (length(v), 1))))
+applyUUt(U::RCholesky{T}, v::Vector) where{T} = vec(applyUUt(U, reshape(v, (length(v), 1))))
 
 function Base.:*(Ut::Adjoint{T,RCholesky{T}}, v::Matrix) where{T}
   Z    = promote_type(T, eltype(v))

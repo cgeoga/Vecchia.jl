@@ -4,12 +4,12 @@ function negloglik(kfun, params, pts, vals, w1)
   updatebuf!(w1, pts, pts, kfun, params)
   K   = cholesky!(Symmetric(w1))
   tmp = K.U'\vals # alloc 1, but this function only gets called once per nll.
-  (logdet(K), sum(x->x^2, tmp))
+  (logdet(K), sum(_square, tmp))
 end
 
 function negloglik(U::UpperTriangular, y_mut_allowed::Matrix{T}) where{T}
   ldiv!(adjoint(U), y_mut_allowed)
-  (2*logdet(U), sum(x->x^2, y_mut_allowed))
+  (2*logdet(U), sum(_square, y_mut_allowed))
 end
 
 function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}

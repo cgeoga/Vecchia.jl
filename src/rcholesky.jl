@@ -22,7 +22,7 @@ end
 
 function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
   map(enumerate(condix)) do (j,cj)
-    isempty(cj) ? zeros(T, 0, 0) : zeros(T, sum(k->sizes[k], cj), sizes[j])
+    isempty(cj) ? zeros(T, 0, 0) : zeros(T, sum(view(sizes, cj)), sizes[j])
   end
 end
 
@@ -119,7 +119,7 @@ function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
 end
 
 function nll(U::RCholesky{T}, data::Matrix{Float64}) where{T}
-  -logdet(U) + sum(x->x^2, U'*data)/2
+  -logdet(U) + sum(_square, U'*data)/2
 end
 
 # This is really just for debugging.
