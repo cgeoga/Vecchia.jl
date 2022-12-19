@@ -11,14 +11,6 @@ struct EMVecchiaIterable{H,D,F,O,K}
   optimizer_kwargs::K
 end
 
-struct NuggetKernel{K} <: Function
-  kernel::K
-end
-
-function (k::NuggetKernel{K})(x, y, p) where{K}
-  k.kernel(x,y,p)+Float64(x==y)*p[end]
-end
-
 function Base.display(M::EMVecchiaIterable{H,D,F}) where{H,D,F}
   display(M.cfg)
   println("EM with:")

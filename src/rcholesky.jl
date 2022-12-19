@@ -46,7 +46,7 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
   cpts_sz = V.chunksize*V.blockrank
   pts_sz  = V.chunksize
   # allocate three buffers:
-  bufs = ntuple(j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz), N)
+  bufs = allocate_crchol_bufs(Val(N), Val(D), Val(Z), cpts_sz, pts_sz)
   # do the main loop:
   m = cld(length(V.condix), Threads.nthreads())
   @sync for (i, chunk) in enumerate(Iterators.partition(1:length(V.condix), m))

@@ -149,24 +149,12 @@ function vecchia_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs.
   optimizer(likelihood, init; optimizer_kwargs...)
 end
 
-function exact_estimate_nugget(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
-  pts = reduce(vcat, cfg.pts)
-  dat = reduce(vcat, cfg.data)
-  # TODO (cg 2022/09/08 13:06): fix this in GPMaxlik.
-  @assert isone(size(dat, 2)) "GPMaxlik.gnll_forwarddiff does not presently work for multiple realizations."
+function exact_estimate(cfg, init; add_nugget=false, optimizer=ipopt_optimize, optimizer_kwargs...)
+  pts  = reduce(vcat, cfg.pts)
+  dat  = reduce(vcat, cfg.data)
   vdat = vec(dat)
-  nugkernel = NuggetKernel(cfg.kernel)
-  obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, nugkernel)
-  optimizer(obj, init; optimizer_kwargs...)
-end
-
-function exact_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
-  pts = reduce(vcat, cfg.pts)
-  dat = reduce(vcat, cfg.data)
-  # TODO (cg 2022/09/08 13:06): fix this in GPMaxlik.
-  @assert isone(size(dat, 2)) "GPMaxlik.gnll_forwarddiff does not presently work for multiple realizations."
-  vdat = vec(dat)
-  obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, cfg.kernel)
+  kernel = add_nugget ? NuggetKernel(cfg.kernel) : cfg.kernel
+  obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, kernel)
   optimizer(obj, init; optimizer_kwargs...)
 end
 
@@ -203,4 +191,18 @@ function globalidxs(datavv)
     start += len
   end
   out
+end
+
+@generated function allocate_cnll_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 
+                                       ndata, cpts_sz, pts_sz) where{N,D,Z}
+  quote
+    Base.Cartesian.@ntuple $N j->cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz)
+  end
+end
+
+@generated function allocate_crchol_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 
+                                         cpts_sz, pts_sz) where{N,D,Z}
+  quote
+    Base.Cartesian.@ntuple $N j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz)
+  end
 end

@@ -28,7 +28,7 @@ function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
   pts_sz  = V.chunksize
   ndata   = size(V.data[1], 2)
   # pre-allocate all buffers:
-  bufs = ntuple(j->cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz), N)
+  bufs = allocate_cnll_bufs(Val(N), Val(D), Val(Z), ndata, cpts_sz, pts_sz)
   # handle the first index base case:
   (ld0, qf0) = negloglik(kernel, params, V.pts[1], V.data[1], bufs[1].buf_pp) 
   # pre-allocate thread-arrays for the logdets and qforms:

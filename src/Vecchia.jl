@@ -1,6 +1,6 @@
 module Vecchia
 
-  using LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays
+  using LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays#, SnoopPrecompile
   using GPMaxlik, StandaloneIpopt
   using ForwardDiff
   using ForwardDiff.DiffResults
@@ -20,5 +20,9 @@ module Vecchia
   include("em.jl")
 
   include("em_iterator.jl")
+
+  #@precompile_all_calls begin
+  #  include(@__DIR__()*"/precompile/precompile.jl")
+  #end
 
 end 
