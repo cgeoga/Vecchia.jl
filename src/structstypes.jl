@@ -14,8 +14,32 @@ end
 struct WrappedLogLikelihood{C} <: Function
   cfg::C
 end
-
 (w::WrappedLogLikelihood{C})(p) where{C} = Vecchia.nll(w.cfg, p)
+
+struct AutoFwdfgh{F,R}
+  f::F 
+  res::R
+end
+
+function AutoFwdfgh(f, n::Int64)
+  res = DiffResults.HessianResult(zeros(n))
+  AutoFwdfgh(f, res)
+end
+
+function (f::AutoFwdfgh{F})(x) where{F}
+  ForwardDiff.hessian!(f.res, f.f, x)
+  (DiffResults.value(f.res), DiffResults.gradient(f.res), 
+   Symmetric(DiffResults.hessian(f.res)))
+end
+
+# Writing a local quadratic approximation struct to avoid creating a closure.
+struct LocalQuadraticApprox
+  fk::Float64
+  gk::Vector{Float64}
+  hk::Symmetric{Float64, Matrix{Float64}}
+end
+(m::LocalQuadraticApprox)(p) = m.fk + dot(m.gk, p) + dot(p, m.hk, p)/2
+
 
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
@@ -136,4 +160,6 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
                        min(blockrank, length(pts_out)),
                        kfun, dat_out, pts_out, condix)
 end
+
+
 

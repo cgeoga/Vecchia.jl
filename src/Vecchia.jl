@@ -1,9 +1,12 @@
 module Vecchia
 
-  using LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays#, SnoopPrecompile
-  using GPMaxlik, StandaloneIpopt
+  using Printf, LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays#, SnoopPrecompile
+  using GPMaxlik, JuMP, Ipopt 
   using ForwardDiff
+  using JuMP.MathOptInterface
   using ForwardDiff.DiffResults
+
+  const MOI = MathOptInterface
 
   export nll, vecchia_estimate, em_estimate
 
@@ -16,6 +19,8 @@ module Vecchia
   include("nll.jl")
 
   include("rcholesky.jl")
+
+  include("sqp.jl")
 
   include("em.jl")
 

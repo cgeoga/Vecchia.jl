@@ -144,18 +144,28 @@ function gpmaxlik_optimize(obj, init; kwargs...)
                        kwargsd...)
 end
 
-function vecchia_estimate(cfg, init; optimizer=ipopt_optimize, optimizer_kwargs...)
+function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)), warn_box=true, 
+                          optimizer=sqptr_optimize, optimizer_kwargs...)
   likelihood = WrappedLogLikelihood(cfg)
-  optimizer(likelihood, init; optimizer_kwargs...)
+  if warn_box
+    @info "You can turn off this warning with the kwarg warn_box=false." maxlog=1
+    @warn "This function defaults to lower bounds on parameters of 1e-5 as a sensible default. But if that's not right for your problem, you can pass in a vector of lower (and upper) bounds with box_lower=[...] and box_upper=[...]." maxlog=1
+  end
+  optimizer(likelihood, init; box_lower=fill(1e-5, length(init)), optimizer_kwargs...)
 end
 
-function exact_estimate(cfg, init; add_nugget=false, optimizer=ipopt_optimize, optimizer_kwargs...)
+function exact_estimate(cfg, init; add_nugget=false, optimizer=sqptr_optimize, 
+                        box_lower=fill(1e-5, length(init)), warn_box=true, optimizer_kwargs...)
+  if warn_box
+    @info "You can turn off this warning with the kwarg warn_box=false." maxlog=1
+    @warn "This function defaults to lower bounds on parameters of 1e-5 as a sensible default. But if that's not right for your problem, you can pass in a vector of lower (and upper) bounds with box_lower=[...] and box_upper=[...]." maxlog=1
+  end
   pts  = reduce(vcat, cfg.pts)
   dat  = reduce(vcat, cfg.data)
   vdat = vec(dat)
   kernel = add_nugget ? NuggetKernel(cfg.kernel) : cfg.kernel
   obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, kernel)
-  optimizer(obj, init; optimizer_kwargs...)
+  optimizer(obj, init; box_lower=box_lower, optimizer_kwargs...)
 end
 
 # for simple debugging and testing.
