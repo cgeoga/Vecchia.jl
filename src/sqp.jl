@@ -8,6 +8,8 @@ const MOI_OK = (MOI.OPTIMAL, MOI.ALMOST_OPTIMAL,
                 MOI.ALMOST_INFEASIBLE, MOI.ALMOST_DUAL_INFEASIBLE,
                 MOI.LOCALLY_SOLVED)
 
+# Returning these as named tuples instead of structs so that you can serialize
+# the objects without needing to bring in whatever package defines the struct type.
 successresult(s, x, v, i, t) = (status=0, criterion=s, minimizer=x, minval=v, iter=i, tol=t)
 failureresult(s, x, i, er=nothing) = (status=-1, criterion=s, x=x, iter=i, error=er)
 
@@ -59,8 +61,8 @@ function solve_qp(xk, gk, hk::Symmetric, S::Symmetric, delta,
     lb  = box_lower - xk
     ub  = isnothing(box_upper) ? nothing : box_upper - xk
     model = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(model, "print_level", 0)
-    set_optimizer_attribute(model, "sb", "yes")
+    set_silent(model)
+    set_optimizer_attribute(model, "sb", "yes") # turn off the banner
     if isnothing(box_upper)
       @variable(model, x[i=1:n] >= lb[i])
     else
@@ -71,12 +73,12 @@ function solve_qp(xk, gk, hk::Symmetric, S::Symmetric, delta,
     optimize!(model)
     return (termination_status(model), value.(x))
   catch er
-    return failureresult(Symbol(:SUBPROB_ERROR), xk, iter, er)
+    return failureresult(:SUBPROB_ERROR, xk, iter, er)
   end
 end
 
 # This is a default that I'll probably want to change at some point. Part of why
-# I'm using Convex+SCS is to handle box constraints, but another part is because
+# I'm using JuMP+Ipopt is to handle box constraints, but another part is because
 # I want to be able to write more general formulations for trust regions and
 # make Convex.jl handle solving those things.
 id_tr_matrix(x, h) = Symmetric(Matrix{Float64}(I(length(x))))
@@ -119,17 +121,15 @@ function sqptr_optimize(f, init;
     mk  = LocalQuadraticApprox(fk, gk, Symmetric(hk))
     s   = regionfunction(x0, hk)
     rho = 0.0
-    counter = 1
     while rho < args[:eta]
       vrb && print(".")
       (stat, step) = solve_qp(x0, gk, hk, s, delta, box_lower, box_upper, j)
-      in(stat, MOI_OK) || return failureresult(Symbol(:SCSFAIL_, stat), x0, j)
+      in(stat, MOI_OK) || return failureresult(Symbol(:SUBPROB_FAIL_, stat), x0, j)
       xp    = x0 .+ step
       fxp   = f(xp)
       rho   = (fk - fxp)/(fk - mk(step))
       delta = update_region(rho, delta, args[:delta_max]*sqrt(n), norm(step), vrb)
       delta < args[:delta_min] && return failureresult(:REGION_TOO_SMALL, x0, j)
-      counter += 1
     end
     vrb && println()
     res = check_convergence(xp, fk, fxp, args[:frtol], args[:fatol], gk, args[:gtol], 

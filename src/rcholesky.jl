@@ -124,8 +124,9 @@ function nll(U::RCholesky{T}, data::Matrix{Float64}) where{T}
 end
 
 # This is really just for debugging.
-function nll_rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
-  U    = rchol(V, params)
+function nll_rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
+                   issue_warning=true) where{H,D,F,T}
+  U    = rchol(V, params; issue_warning=issue_warning)
   data = reduce(vcat, V.data)
   nll(U, data)
 end

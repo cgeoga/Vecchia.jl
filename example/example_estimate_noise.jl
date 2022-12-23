@@ -45,7 +45,8 @@ const cfg = Vecchia.kdtreeconfig(sim_nug, # your simulated data, a Matrix{Float6
 # compete with Ipopt. Hopefully that day will come at some point, though. 
 const opt_kw = (:box_lower=>[0.01, 0.01, 0.25, 0.0], 
                 :alpha_red_factor=>0.15, :tol=>1e-3)
-const em_res = em_estimate(cfg, saa, init, optimizer_kwargs=opt_kw)
+const em_res = em_estimate(cfg, saa, init, optimizer_kwargs=opt_kw, 
+                           warn_optimizer=false, warn_notation=false)
 
 # Your estimator is now given as the last item in your EM path:
 const em_path = em_res[3]
