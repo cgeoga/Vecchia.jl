@@ -11,7 +11,7 @@ const MOI_OK = (MOI.OPTIMAL, MOI.ALMOST_OPTIMAL,
 # Returning these as named tuples instead of structs so that you can serialize
 # the objects without needing to bring in whatever package defines the struct type.
 successresult(s, x, v, i, t) = (status=0, criterion=s, minimizer=x, minval=v, iter=i, tol=t)
-failureresult(s, x, i, er=nothing) = (status=-1, criterion=s, x=x, iter=i, error=er)
+failureresult(s, x, i, er=nothing) = (status=-1, criterion=s, minimizer=x, iter=i, error=er)
 
 # updating the size of the trust region, including some print output information
 # if the verbose flag is given.

@@ -5,6 +5,8 @@
 *.pdf
 *.txt
 *.swp
+*.log
+*.jls
 examples/debug*.jl
 Manifest.toml
 examples/Manifest.toml

@@ -8,10 +8,12 @@ set autoscale yfix
 set format x '\footnotesize %g'
 set format y '\footnotesize %g'
 
-scale="./data/estimates_scale_m30.csv"
-range="./data/estimates_range_m30.csv"
-smooth="./data/estimates_smooth_m30.csv"
-nug="./data/estimates_nug_m30.csv"
+do for [stem in "m10 m30"] {
+
+scale="./data/estimates_scale_".stem.".csv"
+range="./data/estimates_range_".stem.".csv"
+smooth="./data/estimates_smooth_".stem.".csv"
+nug="./data/estimates_nug_".stem.".csv"
 
 #set xtics x_0, dx, x_n
 #set ytics y_0, dy, y_n
@@ -19,8 +21,7 @@ nug="./data/estimates_nug_m30.csv"
 # place arbitrary text with:
 # set label ... 
 
-#set output "sgv_compare.tex"
-set output "sgv_compare_m30.tex"
+set output "./plotting/sgv_compare_".stem.".tex"
 
 SCALERANGE=3.0
 RANGERANGE=0.023
@@ -85,3 +86,4 @@ unset multiplot
 
 unset output
 
+}

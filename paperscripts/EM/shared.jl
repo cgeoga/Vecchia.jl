@@ -1,8 +1,7 @@
 
-using LinearAlgebra, StableRNGs, StaticArrays, BesselK, NearestNeighbors, Serialization
-using Vecchia, EMVecchia2
+using LinearAlgebra, StableRNGs, StaticArrays, BesselK, NearestNeighbors, Serialization, Vecchia
 
-if true #!isinteractive()
+if !isinteractive()
   nthr = Threads.nthreads()
   if nthr == 1
     println("Running with just one thread...") 
@@ -16,7 +15,7 @@ function kernel_nonugget(x, y, p)
   (sg2, rho, nu, nug2) = p
   scaledist  = norm(x-y)/rho
   iszero(scaledist) && return sg2
-  normalizer = sg2/((2^(nu-1))*BesselK.gamma(nu))
+  normalizer = sg2/((2^(nu-1))*BesselK._gamma(nu))
   normalizer*(scaledist^nu)*BesselK.adbesselk(nu, scaledist)
 end
 

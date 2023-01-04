@@ -1,0 +1,10 @@
+algorithm 4
+outlev 4
+feastol 1e-5
+feastol_abs 0.0001
+ftol 1e-12
+ftol_iters 5
+opttol 1e-5
+opttol_abs 0.0001
+xtol 1e-12
+maxit 250
