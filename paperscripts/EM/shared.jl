@@ -11,6 +11,11 @@ if !isinteractive()
   end
 end
 
+# Just two little trick functions to work with the SAA vectors that have been
+# stored in a BitArray. Your computers allocator will thank me.
+sgntobool(x) = x > zero(x)
+booltosgn(x) = x ? 1.0 : -1.0
+
 function kernel_nonugget(x, y, p)
   (sg2, rho, nu, nug2) = p
   scaledist  = norm(x-y)/rho

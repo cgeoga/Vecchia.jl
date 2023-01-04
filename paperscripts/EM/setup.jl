@@ -15,13 +15,12 @@ function simulate(init_seed, n, true_parms, nsamp)
   (pts=points, data=data)
 end
 
-# TODO (cg 2023/01/04 10:25): What I should have done here is saved this as a
-# BitArray and then converted on the fly to random signs. That would have turned
-# 400 MiB of disk to 4 MiB of disk. But at this point I am not interested to
-# play with this code. 
+# Note that this comes out as a BitArray now to save space. Since all we need is
+# the sign (each entry is +1 or -1), we can do that with one bit. And so using a
+# BitArray instead of storing them as floats turns 450 MiB into 5 MiB. 
 function generate_saa(init_seed, n, m, l)
   rng = StableRNG(init_seed)
-  rand(rng, (-1.0, 1.0), n, m, l)
+  BitArray(sgntobool.(rand(rng, (-1.0, 1.0), n, m, l)))
 end
 
 if !isinteractive()

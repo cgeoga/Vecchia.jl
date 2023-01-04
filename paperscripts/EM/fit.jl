@@ -17,7 +17,7 @@ end
 
 function extract_saa(j)
   _saa  = deserialize("./data/saa.jls") # v1.7 serialization!
-  _saa[:,:,j]
+  booltosgn.(_saa[:,:,j])
 end
 
 # Wrapping in a function just to be obviously sure that there is no global scope
