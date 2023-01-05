@@ -13,3 +13,4 @@ examples/Manifest.toml
 test/Mainfest.toml
 debug*.jl
 dev*.jl
+paperscripts/EM/
