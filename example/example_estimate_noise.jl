@@ -26,8 +26,7 @@ const cfg = Vecchia.kdtreeconfig(sim_nug, # your simulated data, a Matrix{Float6
 #
 const opt_kw = (:box_lower=>[0.01, 0.01, 0.25, 0.0], :verbose=>false)
 const em_res = em_estimate(cfg, saa, init, optimizer_kwargs=opt_kw, 
-                           warn_optimizer=false, warn_notation=false,
-                           norm2tol=0, max_em_iter=10)
+                           warn_optimizer=false, warn_notation=false)
 
 # Your estimator is now given as the last item in your EM path:
 const em_path = em_res[3]
