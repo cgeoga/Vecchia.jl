@@ -1,6 +1,15 @@
 
 using LinearAlgebra, StaticArrays, StableRNGs, Vecchia, BesselK
 
+# This is very important for getting the best performance if you use multiple
+# threads for the likelihood computation (which I would highly recommend you
+# do). Julia's thread scheduler and the OpenBLAS scheduler CANNOT "talk" to each
+# other and will get in each other's way, so you have to choose who to give the
+# threads to. For such small matrices anyway, this is the obviously better
+# choice. Particularly since assembling the kernel matrices is probably the
+# bottleneck in most code.
+BLAS.set_num_threads(1)
+
 # A generic function to simulate that gives back both the data with the noise
 # and without the noise, because there are two estimation examples that use
 # both. The function matern is courtesy of BesselK.jl.

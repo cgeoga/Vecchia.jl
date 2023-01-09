@@ -168,15 +168,6 @@ function exact_estimate(cfg, init; add_nugget=false, optimizer=sqptr_optimize,
   optimizer(obj, init; box_lower=box_lower, optimizer_kwargs...)
 end
 
-# for simple debugging and testing.
-function exact_nll(V::VecchiaConfig{H,D,F}, params::Vector{T}) where{H,D,T,F}
-  pts = reduce(vcat, V.pts)
-  dat = reduce(vcat, V.data)
-  buf = Array{T}(undef, length(pts), length(pts))
-  (ld, qf) = negloglik(V.kernel, params, pts, dat, buf)
-  0.5*(ld + qf)
-end
-
 function chunk_indices(vv)
   szs    = [size(vj, 1) for vj in vv]
   starts = vcat(1, cumsum(szs).+1)[1:(end-1)]

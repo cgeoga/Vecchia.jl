@@ -50,7 +50,7 @@ function Base.iterate(it::EMVecchiaIterable{H,D,F}, iteration::Int=0) where{H,D,
   newstep = em_step(it.cfg, it.step_new, it.saa, it.optimizer; it.optimizer_kwargs...)
   # Check for bad returns:
   if !in(newstep.status, (0,1)) 
-    @warn "Optimizer failed to converge and returned status $(newstep.status), not killing the job but proceed with caution."
+    @warn "Optimizer failed to converge and returned status $(newstep.status). This isn't necessarily a problem, but if it keeps happening perhaps you should investigate."
   end
   it.step_old .= it.step_new
   it.step_new .= newstep.minimizer
@@ -116,6 +116,7 @@ end
   # now use the iterator interface:
   (init_result=mle_withnugget,
    em_refine(cfg, saa, mle_withnugget.minimizer; optimizer=optimizer, 
-             verbose=verbose, optimizer_kwargs=optimizer_kwargs)...)
+             verbose=verbose, norm2tol=norm2tol, max_em_iter=max_em_iter,
+             optimizer_kwargs=optimizer_kwargs)...)
 end
 
