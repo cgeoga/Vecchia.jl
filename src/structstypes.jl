@@ -195,5 +195,18 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
                        kfun, dat_out, pts_out, condix)
 end
 
-
+function nosortknnconfig(data, pts, blockrank, kfun)
+  @warn "This function (nosortknnconfig) is for debugging and experimentation only---it is painfully slow and careless." maxlog=1
+  condix = Vector{Vector{Int64}}()
+  push!(condix, Int64[])
+  for j in 2:length(pts)
+    ptj = pts[j]
+    tree_j = NearestNeighbors.KDTree(pts[1:(j-1)])
+    idxs   = NearestNeighbors.knn(tree_j, ptj, min(j-1,blockrank))[1]
+    push!(condix, sort(idxs))
+  end
+  pts = [[x] for x in pts]
+  dat = [[x;;] for x in data]
+  VecchiaConfig(1, blockrank, kfun, dat, pts, condix)
+end
 

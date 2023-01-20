@@ -10,6 +10,8 @@ module Vecchia
 
   export nll, vecchia_estimate, em_estimate
 
+  include("warnings.jl")
+
   include("structstypes.jl")
 
   include("methods.jl")
@@ -25,6 +27,8 @@ module Vecchia
   include("em.jl")
 
   include("em_iterator.jl")
+
+  include("ichol.jl")
 
   #@precompile_all_calls begin
   #  include(@__DIR__()*"/precompile/precompile.jl")

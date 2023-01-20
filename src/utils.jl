@@ -6,7 +6,7 @@ _mean(x) = sum(x)/length(x)
 function checkthreads()
   nthr = Threads.nthreads()
   if nthr > 1 && BLAS.get_num_threads() > 1
-    @warn "It looks like you started Julia with multiple threads but are also using multiple BLAS threads. The Julia multithreading isn't composable with BLAS multithreading, so please run BLAS.set_num_threads(1) before executing this function." maxlog=1
+    @warn THREAD_WARN maxlog=1
   end
 end
 
@@ -124,11 +124,16 @@ end
 generic_nll(R::Diagonal, data)  = 0.5*(logdet(R) + dot(data, R\data))
 
 function generic_nll(R::UniformScaling, data)  
-  n  = size(data, 1)
-  m  = size(data, 2)
-  ld = n*log(R.λ)
-  qf = sum(_square, data)/R.λ
-  (m*ld + qf)/2
+  eta2  = R.λ
+  (n,m) = size(data)
+  (m*n*log(eta2) + sum(_square, data)/eta2)/2
+end
+
+function exact_nll(cfg, p; add_nugget=false)
+  kernel = add_nugget ? NuggetKernel(cfg.kernel) : cfg.kernel
+  pts    = reduce(vcat, cfg.pts)
+  dat    = reduce(vcat, cfg.data)
+  GPMaxlik.gnll_forwarddiff(p, pts, dat, kernel)
 end
 
 function gpmaxlik_optimize(obj, init; kwargs...)
@@ -144,21 +149,24 @@ function gpmaxlik_optimize(obj, init; kwargs...)
                        kwargsd...)
 end
 
-function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)), warn_box=true, 
-                          optimizer=sqptr_optimize, optimizer_kwargs...)
+function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)), 
+                          warn_box=true, optimizer=sqptr_optimize, 
+                          optimizer_kwargs...)
   likelihood = WrappedLogLikelihood(cfg)
   if warn_box
-    @info "You can turn off this warning with the kwarg warn_box=false." maxlog=1
-    @warn "This function defaults to lower bounds on parameters of 1e-5 as a sensible default. But if that's not right for your problem, you can pass in a vector of lower (and upper) bounds with box_lower=[...] and box_upper=[...]." maxlog=1
+    notify_disable("warn_box=false")
+    @warn BOUNDS_WARN maxlog=1
   end
-  optimizer(likelihood, init; box_lower=fill(1e-5, length(init)), optimizer_kwargs...)
+  optimizer(likelihood, init; box_lower=fill(1e-5, length(init)), 
+            optimizer_kwargs...)
 end
 
 function exact_estimate(cfg, init; add_nugget=false, optimizer=sqptr_optimize, 
-                        box_lower=fill(1e-5, length(init)), warn_box=true, optimizer_kwargs...)
+                        box_lower=fill(1e-5, length(init)), 
+                        warn_box=true, optimizer_kwargs...)
   if warn_box
-    @info "You can turn off this warning with the kwarg warn_box=false." maxlog=1
-    @warn "This function defaults to lower bounds on parameters of 1e-5 as a sensible default. But if that's not right for your problem, you can pass in a vector of lower (and upper) bounds with box_lower=[...] and box_upper=[...]." maxlog=1
+    notify_disable("warn_box=false")
+    @warn BOUNDS_WARN maxlog=1
   end
   pts  = reduce(vcat, cfg.pts)
   dat  = reduce(vcat, cfg.data)
@@ -207,3 +215,23 @@ end
     Base.Cartesian.@ntuple $N j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz)
   end
 end
+
+function pretty_print_number(x)
+  if x < zero(x)
+    @printf "%06.3f " x
+  else
+    @printf " %06.3f " x
+  end
+  nothing
+end
+
+# A simple stand-in that pretty-prints a vector. I'm sure there is a smarter way
+# to do this.
+function pretty_print_vec(x, newline=false)
+  print("x: [")
+  pretty_print_number.(x)
+  print("]")
+  newline && println()
+  nothing
+end
+

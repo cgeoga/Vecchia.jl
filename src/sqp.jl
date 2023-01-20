@@ -56,7 +56,7 @@ function solve_qp(xk, gk, hk::Symmetric, S::Symmetric, delta,
                   box_lower, box_upper, iter)
   try
     # Check that the TR norm matrix is positive definite, or else things might blow up:
-    @assert rank(S) == size(S,1) "Your trust region norm-defining matrix is rank deficient, which is not allowed. Please provide a full-rank matrix."
+    @assert rank(S) == size(S,1) "Please provide a full-rank matrix for the trust region norm."
     n   = length(xk)
     lb  = box_lower - xk
     ub  = isnothing(box_upper) ? nothing : box_upper - xk
@@ -82,17 +82,6 @@ end
 # I want to be able to write more general formulations for trust regions and
 # make Convex.jl handle solving those things.
 id_tr_matrix(x, h) = Symmetric(Matrix{Float64}(I(length(x))))
-
-# A simple stand-in that pretty-prints a vector. I'm sure there is a smarter way
-# to do this.
-function pretty_print_vec(x)
-  print("x: [")
-  for j in 1:(length(x)-1)
-    @printf "%1.3f " x[j]
-  end
-  @printf "%1.3f]" x[end]
-  nothing
-end
 
 """
 sqptr: minimize a function f with a TR formulation. At present, supports only box constraints, and is effectively just a TR code that solves the subproblem exactly using JuMP+Ipopt. But next on the list is to implement some variety of SQP to handle real constraints. I'm just undecided about which method I'd like to try. 

@@ -29,6 +29,8 @@ function prepare_z0_SR0(cfg, arg, data)
 end
 
 function em_step(cfg, arg, saa, optimizer; optimizer_kwargs...)
+  # check that the variance parameter isn't zero:
+  @assert arg[end]>0.0 EM_NONUG_WARN
   # Get the data and points and compute z_0 = E_{arg}[ z | y ].
   dat   = reduce(vcat, cfg.data) 
   pts   = reduce(vcat, cfg.pts)
