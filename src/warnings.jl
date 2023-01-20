@@ -4,7 +4,7 @@ function notify_disable(kw)
 end
 
 function notify_optfail(ret)
-  @warn "Optimizer failed to converge and returned status $ret. This isn't necessarily a problem, but if it keeps happening perhaps you should investigate."
+  @warn "Optimizer failed to converge and returned status $ret, but not an error. Unless your iteration is stuck, you can safely ignore this warning and won't see it again." maxlog=1
 end
 
 const NOTATION_WARNING = "In the notation of the paper introducing this method, this code currently only supports R = η^2 I, where the last parameter in your vector is η^2 directly. Support for more generic R matrices is easy and incoming, but if you need it now please open an issue or PR or otherwise poke me (CG) somehow."

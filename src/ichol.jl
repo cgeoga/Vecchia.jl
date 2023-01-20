@@ -79,3 +79,33 @@ function icholU(U::SparseMatrixCSC{T, Int64}) where{T}
   icholU!(_U)
 end
 
+function ichol_nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
+  # Assemble the precision matrix for the process without the nugget, recalling
+  # that this is the "reverse" Cholesky factor so that the precision is U*U',
+  # even though U is upper triangular. This will automatically use
+  # multithreading to assemble U, which is pretty optimized.
+  U  = rchol(V, params, issue_warning=false)
+  Us = sparse(U) # Can't make this UpperTriangular because...
+  S  = Us*Us'    #...this method fails if Us isa UpperTriangular.
+  # Add inverse of the nugget perturbation matrix, noting that the
+  # parameterization this code currently uses gives the VARIANCE of the nugget,
+  # not the standard deviation (so no square of params[end]).
+  S += inv(params[end])*I
+  # Now factorize that:
+  U_ichol = UpperTriangular(icholU!(S))
+  # assemble the data and a buffer to solve:
+  @assert isone(size(V.data[1], 2)) "Temporarily restricting to one observation"
+  P       = promote_type(H, T)
+  data    = convert(Vector{P}, vec(reduce(vcat, V.data)))
+  # Now compute (Sigma + R)^{-1} y efficiently using the representation trick
+  #data_solved = (U_ichol\(U_ichol'\applyUUt(U, data)))./params[end]
+  data_solved = applyUUt(U, data)
+  ldiv!(U_ichol', data_solved)
+  ldiv!(U_ichol,  data_solved)
+  data_solved ./= params[end]
+  # now compute the log-determinant:
+  _ldet = -2*sum(log, diag(Us)) + 2*sum(log, diag(U_ichol)) + log(params[end])*size(Us,1)
+  # return the full likelihood:
+  return (_ldet + dot(data, data_solved))/2
+end
+

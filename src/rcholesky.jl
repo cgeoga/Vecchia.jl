@@ -185,9 +185,3 @@ function SparseArrays.sparse(U::RCholesky{T}) where{T}
   sparse(Iv, Jv, Vv)
 end
 
-
-const RCHOL_INSTANTIATE_ERROR = "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
-
-const RCHOL_WARN = "Note that this is the reverse Cholesky factor for your data enumerated according to the permutation of the VecchiaConfig structure, so if you plan to apply this to vectors be sure to be mindful of potentially re-permuting. The simplest way to permute your data correct is with reduce(vcat, my_config.data)."
-
-

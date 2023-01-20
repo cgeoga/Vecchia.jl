@@ -1,11 +1,18 @@
 module Vecchia
 
-  using Printf, LinearAlgebra, NearestNeighbors, StaticArrays, SparseArrays#, SnoopPrecompile
-  using GPMaxlik, JuMP, Ipopt 
-  using ForwardDiff
+  # Serious/complex dependencies:
+  using JuMP
+
+  # Lightweight dependencies:
+  using NearestNeighbors, StaticArrays, Ipopt, GPMaxlik, ForwardDiff#, SnoopPrecompile
+
+  # Effectively or literally standard library dependencies:
+  using Printf, LinearAlgebra, SparseArrays
+
+  # Not new dependencies, just bringing in modules in the namespace of existing
+  # dependencies:
   using JuMP.MathOptInterface
   using ForwardDiff.DiffResults
-
   const MOI = MathOptInterface
 
   export nll, vecchia_estimate, em_estimate
@@ -23,6 +30,8 @@ module Vecchia
   include("rcholesky.jl")
 
   include("sqp.jl")
+
+  include("errormatrix.jl")
 
   include("em.jl")
 
