@@ -16,7 +16,7 @@ function extract_data(j)
 end
 
 function extract_saa(j)
-  _saa  = deserialize("./data/saa.jls") # v1.7 serialization!
+  _saa  = deserialize("./data/saa.jls") 
   booltosgn.(_saa[:,:,j])
 end
 

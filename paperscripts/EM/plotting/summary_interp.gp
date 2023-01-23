@@ -8,7 +8,7 @@ set autoscale yfix
 set format x '\footnotesize %g'
 set format y '\footnotesize %g'
 
-set output "./plotting/centerinterp.tex"
+set output "./centerinterp.tex"
 
 set xtics  offset 0.0,0.35
 set ylabel offset 2.0,0.0

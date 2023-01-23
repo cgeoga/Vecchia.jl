@@ -21,7 +21,7 @@ nug="./data/estimates_nug_".stem.".csv"
 # place arbitrary text with:
 # set label ... 
 
-set output "./plotting/sgv_compare_".stem.".tex"
+set output "./sgv_compare_".stem.".tex"
 
 SCALERANGE=3.0
 RANGERANGE=0.023

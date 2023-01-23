@@ -54,7 +54,9 @@ $JULIA_HOME/julia ./plotting/prepare_summary.jl
 $JULIA_HOME/julia ./plotting/prepare_centerinterp.jl
 $JULIA_HOME/julia ./plotting/prepare_histogram.jl 
 # gnuplot code to generate figures:
+cd plotting
 gnuplot summary_estimates.gp
 gnuplot summary_interp.gp
 gnuplot summary_nlls.gp 
+cd -
 

@@ -16,7 +16,7 @@ do for [stem in "m10 m30"] {
 
 file="./data/nll_difs_".stem."_hist.csv"
 
-set output "./plotting/nll_difs".stem.".tex"
+set output "./nll_difs".stem.".tex"
 
 set multiplot layout 1,1 margins 0.1,0.9,0.1,0.9 spacing 0,0
 
