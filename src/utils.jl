@@ -109,44 +109,12 @@ function rchol_nnz(U::RCholesky{T}) where{T}
   out
 end
 
-function debug_exactnll(cfg, params, nugget=false)
-  pts = reduce(vcat, cfg.pts)
-  dat = reduce(vcat, cfg.data)
-  buf = [cfg.kernel(x,y,params) for x in pts, y in pts]
-  if nugget
-    buf += params[end]*I
-  end
-  S   = Symmetric(buf)
-  Sf  = cholesky!(S)
-  (logdet(Sf), sum(_square, Sf.U'\dat))
-end
-
 generic_nll(R::Diagonal, data)  = 0.5*(logdet(R) + dot(data, R\data))
 
 function generic_nll(R::UniformScaling, data)  
   eta2  = R.λ
   (n,m) = size(data)
   (m*n*log(eta2) + sum(_square, data)/eta2)/2
-end
-
-function exact_nll(cfg, p; add_nugget=false)
-  kernel = add_nugget ? NuggetKernel(cfg.kernel) : cfg.kernel
-  pts    = reduce(vcat, cfg.pts)
-  dat    = reduce(vcat, cfg.data)
-  GPMaxlik.gnll_forwarddiff(p, pts, dat, kernel)
-end
-
-function gpmaxlik_optimize(obj, init; kwargs...)
-  kwargsd = Dict(kwargs)
-  objgh = p -> begin
-    res = DiffResults.HessianResult(p)
-    ForwardDiff.hessian!(res, obj, p)
-    (DiffResults.value(res), DiffResults.gradient(res), DiffResults.hessian(res))
-  end
-  GPMaxlik.trustregion(obj, objgh, init; 
-                       dmax=get(kwargsd, :dmax, Float64(length(init))),
-                       dcut=get(kwargsd, :dcut, 1e-10),
-                       kwargsd...)
 end
 
 function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)), 
@@ -170,10 +138,20 @@ function exact_estimate(cfg, init; add_nugget=false, optimizer=sqptr_optimize,
   end
   pts  = reduce(vcat, cfg.pts)
   dat  = reduce(vcat, cfg.data)
+  n    = length(pts)
   vdat = vec(dat)
-  kernel = add_nugget ? NuggetKernel(cfg.kernel) : cfg.kernel
+  kernel = add_nugget ? ErrorKernel(cfg.kernel, ScaledIdentity(n)) : cfg.kernel
   obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, kernel)
   optimizer(obj, init; box_lower=box_lower, optimizer_kwargs...)
+end
+
+function vecchia_estimate_nugget(cfg, init, optimizer, errormodel; 
+                                 optimizer_kwargs...)
+  nugkernel = ErrorKernel(cfg.kernel, errormodel) 
+  nug_cfg   = Vecchia.VecchiaConfig(cfg.chunksize, cfg.blockrank,
+                                    nugkernel, cfg.data, cfg.pts, cfg.condix)
+  likelihood = WrappedLogLikelihood(nug_cfg)
+  optimizer(likelihood, init; optimizer_kwargs...)
 end
 
 function chunk_indices(vv)

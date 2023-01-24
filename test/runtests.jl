@@ -5,6 +5,12 @@ using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia, SparseArrays
 # 1) Any EM tests
 # 2) Any sqp/tr tests
 
+function exact_nll(cfg, p)
+  pts = reduce(vcat, cfg.pts)
+  dat = reduce(vcat, cfg.data)
+  Vecchia.GPMaxlik.gnll_forwarddiff(p, pts, dat, cfg.kernel)
+end
+
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
 
 # quick testing values:
@@ -24,7 +30,7 @@ vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
 # conditioning set is every prior point.
 println("testing nll...")
 vecchia_nll  = nll(vecc_exact, ones(3))
-debug_nll    = Vecchia.exact_nll(vecc_exact, ones(3))
+debug_nll    = exact_nll(vecc_exact, ones(3))
 @test isapprox(vecchia_nll, debug_nll)
 
 # Test 5: the nll with multiple data sources agrees with the sum of two

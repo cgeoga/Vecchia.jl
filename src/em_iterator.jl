@@ -21,9 +21,8 @@ function Base.display(M::EMVecchiaIterable)
   println("  - optimizer:          $(M.optimizer)")
 end
 
-function EMiterable(cfg, init, saa; kwargs...)
+function EMiterable(cfg, init, saa, errormodel; kwargs...)
   kwargsd = Dict(kwargs)
-  sz = sum(length, cfg.pts)
   EMVecchiaIterable(cfg, 
                     copy(init),
                     copy(init),
@@ -31,9 +30,9 @@ function EMiterable(cfg, init, saa; kwargs...)
                     Ref(:NOT_CONVERGED),
                     get(kwargsd, :norm2tol,    1e-2),
                     get(kwargsd, :max_em_iter, 20),
-                    get(kwargsd, :errormodel, ScaledIdentity(sz)),
+                    errormodel,
                     get(kwargsd, :optimizer, sqptr_optimize),
-                    get(kwargsd, :optimizer_kwargs, ()))
+                    Dict(get(kwargsd, :optimizer_kwargs, ())))
 end
 
 function Base.iterate(it::EMVecchiaIterable{H,D,F,O,R}, 
@@ -72,8 +71,8 @@ function Base.iterate(it::EMVecchiaIterable{H,D,F,O,R},
   (newstep.minimizer, iteration+1)
 end
 
-function em_refine(cfg, saa, init; verbose=true, kwargs...)
-  iter = EMiterable(cfg, init, saa; kwargs...)
+function em_refine(cfg, errormodel, saa, init; verbose=true, kwargs...)
+  iter = EMiterable(cfg, init, saa, errormodel; kwargs...)
   if verbose
     println("Refining parameter estimate $(round.(init, digits=3)):")
     display(iter)
@@ -93,15 +92,8 @@ function em_refine(cfg, saa, init; verbose=true, kwargs...)
   (status=iter.status[], path=path)
 end
 
-function vecchia_mle_withnugget(cfg, init, optimizer; optimizer_kwargs...)
-  nugkernel = NuggetKernel(cfg.kernel) 
-  nug_cfg   = Vecchia.VecchiaConfig(cfg.chunksize, cfg.blockrank,
-                                    nugkernel, cfg.data, cfg.pts, cfg.condix)
-  likelihood = WrappedLogLikelihood(nug_cfg)
-  optimizer(likelihood, init; optimizer_kwargs...)
-end
-
 function em_estimate(cfg, saa, init; 
+                     errormodel=ScaledIdentity(sum(length, cfg.pts)),
                      warn_optimizer=true,
                      warn_notation=true,
                      verbose=true,
@@ -115,12 +107,12 @@ function em_estimate(cfg, saa, init;
 end
   # compute initial estimator using Vecchia with the nugget and nothing thoughtful:
   verbose && println("\nComputing initial MLE with standard Vecchia...")
-  mle_withnugget = vecchia_mle_withnugget(cfg, init, optimizer; 
+  mle_withnugget = vecchia_estimate_nugget(cfg, init, optimizer, errormodel; 
                                           optimizer_kwargs...)
   # check for success:
   if !in(mle_withnugget.status, (0,1))
     @warn FALLBACK_WARNING
-    mle_withnugget = vecchia_mle_withnugget(cfg, vcat(init[1:(end-1)], 0.01), 
+    mle_withnugget = vecchia_estimate_nugget(cfg, vcat(init[1:(end-1)], 0.01), 
                                             optimizer; optimizer_kwargs...)
     !in(mle_withnugget.status, (0,1)) && @warn FALLBACK_FAIL_WARNING
   end
@@ -130,7 +122,7 @@ end
   end
   # now use the iterator interface:
   (init_result=mle_withnugget,
-   em_refine(cfg, saa, mle_withnugget.minimizer; optimizer=optimizer, 
+   em_refine(cfg, errormodel, saa, mle_withnugget.minimizer; optimizer=optimizer, 
              verbose=verbose, norm2tol=norm2tol, max_em_iter=max_em_iter,
              optimizer_kwargs=optimizer_kwargs)...)
 end

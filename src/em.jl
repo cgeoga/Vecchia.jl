@@ -29,7 +29,7 @@ function (E::ExpectedJointNll{C})(p) where{C}
   # add on the generic nll for the measurement noise and the quadratic forms
   # with the error matrix that contribute to the trace term. 
   out += error_nll(E.errormodel, p, E.data_minus_z0)
-  out += error_qform(E.errormodel, p, E.presolved_saa, E.presolved_saa_sumsq)
+  out += error_qform(E.errormodel, p, E.presolved_saa, E.presolved_saa_sumsq)/2
   out
 end
 
@@ -42,7 +42,6 @@ Compute Sig*(Sig + R)^{-1} z
 """
 function prepare_z0_SR0(cfg, arg, data, errormodel)
   n    = size(data, 1)
-  #s2   = arg[end]
   Rinv = error_precision(errormodel, arg)
   U    = sparse(Vecchia.rchol(cfg, arg, issue_warning=false))
   SR   = Symmetric(U*U' + Rinv) 

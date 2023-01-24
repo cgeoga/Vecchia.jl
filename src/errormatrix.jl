@@ -33,21 +33,25 @@ error_precision(R::ScaledIdentity,  p) = inv(p[end])*I
 # where R = x*I, you can pre-square-and-sum all the v elements, which can speed
 # things up. So that squared sum is a fourth argument to this function, but you
 # can just ignore it if it isn't useful to you.
-function error_qform(R::ScaledIdentity, p, presolved, presolved_sumsq) 
-  presolved_sumsq/(2*p[end])
-end
+error_qform(R::ScaledIdentity, p, y, yTy) = yTy/p[end]
 
-# method four: check that R is invertible.
+# method four: the log-determinant of the error covariance. 
+error_logdet(R::ScaledIdentity,  p) = R.size*log(p[end])
+
+# method five: check that R is invertible.
 error_isinvertible(R::ScaledIdentity, p) = p[end] > zero(eltype(p))
+
+# method six: a generic kernel evaluation.
+(S::ScaledIdentity)(x, y, params) = ifelse(x==y, params[end], zero(eltype(params)))
 
 
 #
 # OPTIONAL METHODS:
 # 
 
-# (optional) method four: a negative log-likelihood. For UniformScaling and
-# Diagonal matrices, I have a generic nll for this. But you could define this
-# method for your R::MyCoolType to specialize and exploit specific structure you
-# want it to have.
-error_nll(R, p, y) = generic_nll(error_covariance(R, p), y)
+# (optional) a specialized error nll. But you were already forced to do the
+# quadratic form and the logdet, so unless there are additional savings to be
+# made in computing them together you probably don't need to specialize this
+# method to your type.
+error_nll(R, p, y) = (error_logdet(R, p) + error_qform(R, p, nothing, sum(abs2, y)))/2
 

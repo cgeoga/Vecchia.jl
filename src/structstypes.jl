@@ -3,12 +3,13 @@ const PrecisionPiece{T} = Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
 
 abstract type AbstractVecchiaConfig{H,D,F} end
 
-struct NuggetKernel{K} <: Function
+struct ErrorKernel{K,E} <: Function
   kernel::K
+  error::E
 end
 
-function (k::NuggetKernel{K})(x, y, p) where{K}
-  k.kernel(x,y,p)+Float64(x==y)*p[end]
+function (k::ErrorKernel{K})(x, y, p) where{K}
+  k.kernel(x,y,p)+k.error(x,y,p)
 end
 
 struct WrappedLogLikelihood{C} <: Function

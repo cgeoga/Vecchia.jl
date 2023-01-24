@@ -13,7 +13,7 @@ for d in (1, 2, 3)
   pts   = rand(SVector{d,Float64}, 100)
   cfg   = Vecchia.kdtreeconfig(randn(length(pts)), pts, 1, 5, exp12_kernel) 
   ncfg  = Vecchia.kdtreeconfig(randn(length(pts)), pts, 1, 5, 
-                              Vecchia.NuggetKernel(exp12_kernel))
+                               Vecchia.ErrorKernel(exp12_kernel, ScaledIdentity(100)))
   wrap  = Vecchia.WrappedLogLikelihood(cfg)
   nwrap = Vecchia.WrappedLogLikelihood(ncfg)
   # precompile likelihood, gradient, and Hessian:
