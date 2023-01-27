@@ -113,9 +113,8 @@ function sqptr_optimize(f, init;
     while rho < args[:eta]
       vrb && print(".")
       (stat, step) = solve_qp(x0, gk, hk, s, delta, box_lower, box_upper, j)
-      #in(stat, MOI_OK) || return failureresult(Symbol(:SUBPROB_FAIL_, stat), x0, j)
-      if !in(stat, MOI_OK)
-        vrb && print("f")
+      if !in(stat, MOI_OK) && delta > args[:delta_min]
+        vrb && print("f($(stat))")
         delta /= 4
         continue
       end

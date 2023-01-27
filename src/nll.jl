@@ -57,16 +57,22 @@ function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
 end
 
 function cnll_str(V, idxs, strbuf::CondLogLikBuf{D,T}, pts, dat, params) where{D,T}
-  # prepare conditioning points:
+  # prepare the marginal points and buffer:
+  mdat   = view(strbuf.buf_mdat, 1:size(dat,1), :)
+  mdat  .= dat
+  cov_pp = view(strbuf.buf_pp, 1:length(pts),  1:length(pts))
+  updatebuf!(cov_pp,  pts,  pts, V.kernel, params, skipltri=false)
+  # if the conditioning set is empty, just return the marginal nll:
+  if isempty(idxs)
+    cov_pp_f = cholesky!(Symmetric(cov_pp))
+    return negloglik(cov_pp_f.U, mdat)
+  end
+  # otherwise, proceed and prepare conditioning points:
   cpts  = updateptsbuf!(strbuf.buf_cpts, V.pts,  idxs)
   cdat  = updatedatbuf!(strbuf.buf_cdat, V.data, idxs)
-  mdat  = view(strbuf.buf_mdat, 1:size(dat,1), :)
-  mdat .= dat
   # prepare and fill in the matrix buffers pertaining to the cond.  points:
-  cov_pp = view(strbuf.buf_pp, 1:length(pts),  1:length(pts))
   cov_cp = view(strbuf.buf_cp, 1:length(cpts), 1:length(pts))
   cov_cc = view(strbuf.buf_cc, 1:length(cpts), 1:length(cpts))
-  updatebuf!(cov_pp,  pts,  pts, V.kernel, params, skipltri=false)
   updatebuf!(cov_cc, cpts, cpts, V.kernel, params, skipltri=true)
   updatebuf!(cov_cp, cpts,  pts, V.kernel, params, skipltri=false)
   # Factorize the covariance matrix for the conditioning points:
