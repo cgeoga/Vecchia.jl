@@ -113,7 +113,12 @@ function sqptr_optimize(f, init;
     while rho < args[:eta]
       vrb && print(".")
       (stat, step) = solve_qp(x0, gk, hk, s, delta, box_lower, box_upper, j)
-      in(stat, MOI_OK) || return failureresult(Symbol(:SUBPROB_FAIL_, stat), x0, j)
+      #in(stat, MOI_OK) || return failureresult(Symbol(:SUBPROB_FAIL_, stat), x0, j)
+      if !in(stat, MOI_OK)
+        vrb && print("f")
+        delta /= 4
+        continue
+      end
       xp    = x0 .+ step
       fxp   = f(xp)
       rho   = (fk - fxp)/(fk - mk(step))

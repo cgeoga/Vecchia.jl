@@ -80,7 +80,7 @@ function icholU(U::SparseMatrixCSC{T, Int64}) where{T}
 end
 
 function ichol_nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
-                   errormodel=ScaledIdentity(sum(length, V.pts))) where{H,D,F,T}
+                   errormodel) where{H,D,F,T}
   # Assemble the precision matrix for the process without the nugget, recalling
   # that this is the "reverse" Cholesky factor so that the precision is U*U',
   # even though U is upper triangular. This will automatically use

@@ -7,7 +7,7 @@ function negloglik(kfun, params, pts, vals, w1)
   (logdet(K), sum(_square, tmp))
 end
 
-function negloglik(U::UpperTriangular, y_mut_allowed::Matrix{T}) where{T}
+function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T}
   ldiv!(adjoint(U), y_mut_allowed)
   (2*logdet(U), sum(_square, y_mut_allowed))
 end
@@ -60,7 +60,8 @@ function cnll_str(V, idxs, strbuf::CondLogLikBuf{D,T}, pts, dat, params) where{D
   # prepare conditioning points:
   cpts  = updateptsbuf!(strbuf.buf_cpts, V.pts,  idxs)
   cdat  = updatedatbuf!(strbuf.buf_cdat, V.data, idxs)
-  strbuf.buf_mdat .= dat
+  mdat  = view(strbuf.buf_mdat, 1:size(dat,1), :)
+  mdat .= dat
   # prepare and fill in the matrix buffers pertaining to the cond.  points:
   cov_pp = view(strbuf.buf_pp, 1:length(pts),  1:length(pts))
   cov_cp = view(strbuf.buf_cp, 1:length(cpts), 1:length(pts))
@@ -73,13 +74,13 @@ function cnll_str(V, idxs, strbuf::CondLogLikBuf{D,T}, pts, dat, params) where{D
   # Before mutating the cross-covariance buffer, compute y - hat{y}, where
   # hat{y} is the conditional expectation of y given the conditioning data.
   ldiv!(cov_cc_f, cdat)
-  mul!(strbuf.buf_mdat, cov_cp', cdat, -one(T), one(T))
+  mul!(mdat, cov_cp', cdat, -one(T), one(T))
   # Now compute the conditional covariance matrix, reusing buffers to cut
   # out any unnecessary allocations.
   ldiv!(cov_cc_f.U', cov_cp)
   mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(T), one(T))
   cov_pp_cond = cholesky!(Symmetric(cov_pp))
   # compute the log-likelihood:
-  negloglik(cov_pp_cond.U, strbuf.buf_mdat)
+  negloglik(cov_pp_cond.U, mdat)
 end
 

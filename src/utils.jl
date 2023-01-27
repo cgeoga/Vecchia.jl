@@ -121,7 +121,7 @@ function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)),
                           warn_box=true, optimizer=sqptr_optimize, 
                           optimizer_kwargs...)
   likelihood = WrappedLogLikelihood(cfg)
-  if warn_box
+  if warn_box && all(==(1e-5), box_lower)
     notify_disable("warn_box=false")
     @warn BOUNDS_WARN maxlog=1
   end
@@ -129,7 +129,8 @@ function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)),
             optimizer_kwargs...)
 end
 
-function exact_estimate(cfg, init; add_nugget=false, optimizer=sqptr_optimize, 
+function exact_estimate(cfg, init; errormodel=nothing, 
+                        optimizer=sqptr_optimize, 
                         box_lower=fill(1e-5, length(init)), 
                         warn_box=true, optimizer_kwargs...)
   if warn_box
@@ -140,7 +141,7 @@ function exact_estimate(cfg, init; add_nugget=false, optimizer=sqptr_optimize,
   dat  = reduce(vcat, cfg.data)
   n    = length(pts)
   vdat = vec(dat)
-  kernel = add_nugget ? ErrorKernel(cfg.kernel, ScaledIdentity(n)) : cfg.kernel
+  kernel = isnothing(errormodel) ? cfg.kernel : ErrorKernel(cfg.kernel, ScaledIdentity(n))
   obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, kernel)
   optimizer(obj, init; box_lower=box_lower, optimizer_kwargs...)
 end
@@ -196,7 +197,7 @@ end
 
 function pretty_print_number(x)
   if x < zero(x)
-    @printf "%06.3f " x
+    @printf "-%06.3f " abs(x)
   else
     @printf " %06.3f " x
   end

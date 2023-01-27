@@ -32,7 +32,7 @@ function EMiterable(cfg, init, saa, errormodel; kwargs...)
                     get(kwargsd, :max_em_iter, 20),
                     errormodel,
                     get(kwargsd, :optimizer, sqptr_optimize),
-                    Dict(get(kwargsd, :optimizer_kwargs, ())))
+                    Dict{Symbol,Any}(get(kwargsd, :optimizer_kwargs, ())))
 end
 
 function Base.iterate(it::EMVecchiaIterable{H,D,F,O,R}, 
@@ -93,7 +93,7 @@ function em_refine(cfg, errormodel, saa, init; verbose=true, kwargs...)
 end
 
 function em_estimate(cfg, saa, init; 
-                     errormodel=ScaledIdentity(sum(length, cfg.pts)),
+                     errormodel,
                      warn_optimizer=true,
                      warn_notation=true,
                      verbose=true,
@@ -108,13 +108,12 @@ end
   # compute initial estimator using Vecchia with the nugget and nothing thoughtful:
   verbose && println("\nComputing initial MLE with standard Vecchia...")
   mle_withnugget = vecchia_estimate_nugget(cfg, init, optimizer, errormodel; 
-                                          optimizer_kwargs...)
-  # check for success:
+                                           optimizer_kwargs...)
   if !in(mle_withnugget.status, (0,1))
-    @warn FALLBACK_WARNING
-    mle_withnugget = vecchia_estimate_nugget(cfg, vcat(init[1:(end-1)], 0.01), 
-                                            optimizer; optimizer_kwargs...)
-    !in(mle_withnugget.status, (0,1)) && @warn FALLBACK_FAIL_WARNING
+    if haskey(mle_withnugget, :error)
+      err = mle_withnugget.error
+      !isnothing(err) && throw(err)
+    end
   end
   if optimizer==sqptr_optimize && warn_optimizer
     notify_disable("warn_optimizer=false")
