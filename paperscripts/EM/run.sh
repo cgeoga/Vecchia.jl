@@ -60,3 +60,6 @@ gnuplot summary_interp.gp
 gnuplot summary_nlls.gp 
 cd -
 
+echo -e "\nRunning LIDAR model estimation code..."
+$JULIA_HOME/julia --project=Project.toml -O3 -C"native" -t${2:-6} lidar.jl
+

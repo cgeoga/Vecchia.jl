@@ -17,7 +17,6 @@ function (E::ExpectedJointNll{C})(p) where{C}
   # create type instability, and then passes them to _nll so that the function
   # barrier means that everything _inside_ _nll, which we want to be fast and
   # multithreaded, is stable and non-allocating.
-  checkthreads()
   Z     = promote_type(eltype(first(E.cfg.data)), eltype(p))
   nthr  = Threads.nthreads()
   ndata = size(E.data_minus_z0, 2)
@@ -38,7 +37,7 @@ end
 """
 prepare_z0_SR0(cfg::VecchiaConfig, arg::AbstractVector) -> (z0, SR0)
 
-Compute Sig*(Sig + R)^{-1} z
+Compute E [z | y] to use in the E function.
 """
 function prepare_z0_SR0(cfg, arg, data, errormodel)
   n    = size(data, 1)
@@ -50,6 +49,7 @@ function prepare_z0_SR0(cfg, arg, data, errormodel)
 end
 
 function em_step(cfg, arg, saa, errormodel, optimizer; optimizer_kwargs...)
+  checkthreads() 
   # check that the variance parameter isn't zero:
   @assert error_isinvertible(errormodel, arg) EM_NONUG_WARN
   # Get the data and points and compute z_0 = E_{arg}[ z | y ].
@@ -61,7 +61,7 @@ function em_step(cfg, arg, saa, errormodel, optimizer; optimizer_kwargs...)
   # [(PtL)*(PtL^T)]^{-1}). Re-arranging those things, that means I am computing
   # tr(M*M^T), where M=U'*(PtL)^{-T}. So that's what the pre-solve is here.
   divisor = sqrt(size(saa,2))
-  pre_sf_solved_saa = (SR0f.PtL'\saa)./divisor # could pre-solve this once...
+  pre_sf_solved_saa = (SR0f.PtL'\saa)./divisor 
   pre_sf_solved_saa_sumsq = sum(_square, pre_sf_solved_saa)
   # Now, unlike the v1 version, create a NEW configuration where the "data"
   # field is actually hcat(z0, pre_sf_solved_saa./sqrt(2*M)). This division is

@@ -31,7 +31,7 @@ side, that of course comes at the cost of a learning curve.
 buy. Emphasis on buy, though, because you do have to buy it and it is
 expensive. There is a six month trial version, though, that you can get, and
 you're restricted to 300 unknowns and constraints. So that version works fine
-for recreating this code.  But it isn't easy to get it working, and so if you
+for recreating this code.  But it isn't trivial to get it working, and so if you
 want to try to do that and aren't familiar with this process of connecting
 software packages maybe open up an issue or email me or something. *I have
 confirmed that the generic trust region optimizer that I have baked in
@@ -40,12 +40,13 @@ deal with this unless you really really want to.*
 
 
 As a general word of warning, **This code suite in total takes at least 6 hours
-on my desktop workstation with an i5-11600K CPU. And so if you're running this
-on a laptop, you should expect it to take WAY longer than that.** If you just
-want to "spot check" the code, so to speak, shoot me an email/open an issue/call
-me/whatever. I've designed the code in such a way that it isn't too much of a
-pain to just estimate parameters for one of the 50 trials, for example, just to
-get a sense of how things work and stuff.
+on my desktop workstation with an i5-11600K CPU (that can chug power from a wall
+outlet!). And so if you're running this on a laptop, you should expect it to
+take WAY longer than that.** If you just want to "spot check" the code, so to
+speak, shoot me an email/open an issue/call me/whatever. I've designed the code
+in such a way that it isn't too much of a pain to just estimate parameters for
+one of the 50 trials, for example, just to get a sense of how things work and
+stuff.
 
 CG (Jan 2023)
 
