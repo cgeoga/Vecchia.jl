@@ -15,3 +15,4 @@ debug*.jl
 dev*.jl
 paperscripts/EM/plotting/*.tex
 paperscripts/EM/plotting/*.eps
+!paperscripts/EM/data/lidar_highalt.csv

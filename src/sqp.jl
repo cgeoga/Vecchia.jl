@@ -52,11 +52,9 @@ end
 # cheap by comparison. So it is my hope/expectation, which has been sort of born
 # out through my own ad-hoc testing, that it can save at least a few iterations
 # total to do this exactly.
-function solve_qp(xk, gk, hk::Symmetric, S::Symmetric, delta, 
+function solve_qp(xk, gk, hk::Symmetric, delta, 
                   box_lower, box_upper, iter)
   try
-    # Check that the TR norm matrix is positive definite, or else things might blow up:
-    @assert rank(S) == size(S,1) "Please provide a full-rank matrix for the trust region norm."
     n   = length(xk)
     lb  = box_lower - xk
     ub  = isnothing(box_upper) ? nothing : box_upper - xk
@@ -69,19 +67,13 @@ function solve_qp(xk, gk, hk::Symmetric, S::Symmetric, delta,
       @variable(model, lb[i] <= x[i=1:n] <= ub[i])
     end
     @objective(model, Min, dot(x, gk) + dot(x, hk, x)/2)
-    @constraint(model, dot(x, S, x) <= delta^2)
+    @constraint(model, dot(x, x) <= delta^2)
     optimize!(model)
     return (termination_status(model), value.(x))
   catch er
     return failureresult(:SUBPROB_ERROR, xk, iter, er)
   end
 end
-
-# This is a default that I'll probably want to change at some point. Part of why
-# I'm using JuMP+Ipopt is to handle box constraints, but another part is because
-# I want to be able to write more general formulations for trust regions and
-# make Convex.jl handle solving those things.
-id_tr_matrix(x, h) = Symmetric(Matrix{Float64}(I(length(x))))
 
 """
 sqptr: minimize a function f with a TR formulation. At present, supports only box constraints, and is effectively just a TR code that solves the subproblem exactly using JuMP+Ipopt. But next on the list is to implement some variety of SQP to handle real constraints. I'm just undecided about which method I'd like to try. 
@@ -90,7 +82,6 @@ function sqptr_optimize(f, init;
                         fgh=AutoFwdfgh(f, length(init)),
                         box_lower=fill(-floatmax(), length(init)), 
                         box_upper=nothing, 
-                        regionfunction=id_tr_matrix, 
                         kwargs...)
   # read in args, set up x0:
   n     = length(init)
@@ -108,11 +99,10 @@ function sqptr_optimize(f, init;
       return failureresult(:FGH_ERROR, x0, j, er)
     end
     mk  = LocalQuadraticApprox(fk, gk, Symmetric(hk))
-    s   = regionfunction(x0, hk)
     rho = 0.0
     while rho < args[:eta]
       vrb && print(".")
-      (stat, step) = solve_qp(x0, gk, hk, s, delta, box_lower, box_upper, j)
+      (stat, step) = solve_qp(x0, gk, hk, delta, box_lower, box_upper, j)
       if !in(stat, MOI_OK) && delta > args[:delta_min]
         vrb && print("f($(stat))")
         delta /= 4

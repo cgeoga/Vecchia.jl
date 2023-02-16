@@ -25,3 +25,5 @@ const RCHOL_WARN = "Note that this is the reverse Cholesky factor for your data 
 
 const EM_NONUG_WARN = "Your perturbation/error variance is zero, which violates the requirement that its covariance matrix be invertible. Perhaps you could get away with modeling without the nugget effect after all? Alternatively, check your code for the covariance function perhaps."
 
+const TR_NORM_ERROR = "Please provide a full-rank matrix for the trust region norm."
+
