@@ -79,30 +79,17 @@ As mentioned above, measurement error can really hurt the accuracy of these
 approximations. If your model is effectively given by `data(x) = good_gp(x) +
 iid_noise(x)`, where `good_gp` is something that screens well that you actually
 want to use Vecchia on and `iid_noise` has VARIANCE `eta^2`, then you can
-estimate all parameters, including `eta^2`, like so:
-```julia
-# importantly, your kernel function here should NOT include the nugget:
-cfg = Vecchia.kdtreeconfig(data, pts, chunksize, num_cond_chunks, kernel_no_nug)
+estimate all parameters, including `eta^2`, with the built in EM algorithm
+procedure that is demonstrated in `./example/example_estimate_noise.jl`. See
+also the [paper](https://arxiv.org/abs/2208.06877) for a lot more information.
 
-# draw some iid Rademacher vectors that are used in a stochastic trace
-# calculation in the estimation routine:
-saa = rand((-1.0, 1.0), n_data, n_saa)
+This method works equally well for **any** perturbation whose covariance matrix
+admits a fast solve, although ideally also a fast log-determinant. The code now
+allows you to provide an arbitrary struct for working with the error covariance
+matrix, and you can inspect `./src/errormatrix.jl` for a demonstration of the
+methods that you need to provide that struct for everything to "just work".
 
-# Estimate. This object currently returns a lot of diagnostic information and at
-# some point you should expect me to clean this up a bit so you don't have to do
-# ugly reference to get your estimator.
-em_mle = em_estimate(cfg, [init_good_gp_params, init_eta^2], saa)[3][end]
-```
-This is of course too terse of a discussion here, but see the example file for
-more information and see also the [paper](https://arxiv.org/abs/2208.06877) for
-a lot more information. **If you use this method, please cite this paper**.
-
-Additionally, the method for this works equally well for **any** perturbation
-whose covariance matrix admits a fast solve, although ideally also a fast
-log-determinant. The code here just isn't as general as it should be because I
-haven't needed to think carefully about the more general case in my own
-research. But if you need that functionality, open an issue or poke me in some
-other way and we can discuss getting you what you need.
+**If you use this method, please cite [this paper](https://arxiv.org/abs/2208.06877)**.
 
 ## Sparse precision matrix and ("reverse") Cholesky factors
 
