@@ -181,11 +181,9 @@ function globalidxs(datavv)
   out
 end
 
-@generated function allocate_cnll_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 
-                                       ndata, cpts_sz, pts_sz) where{N,D,Z}
-  quote
-    Base.Cartesian.@ntuple $N j->cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz)
-  end
+function allocate_cnll_bufs(N, ::Val{D}, ::Val{Z}, 
+                                       ndata, cpts_sz, pts_sz) where{D,Z}
+  [cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz) for _ in 1:N]
 end
 
 @generated function allocate_crchol_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 

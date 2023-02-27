@@ -1,12 +1,4 @@
 
-# Non-conditional negative log-likelihood.
-function negloglik(kfun, params, pts, vals, w1)
-  updatebuf!(w1, pts, pts, kfun, params)
-  K   = cholesky!(Symmetric(w1))
-  tmp = K.U'\vals # alloc 1, but this function only gets called once per nll.
-  (logdet(K), sum(_square, tmp))
-end
-
 function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T}
   ldiv!(adjoint(U), y_mut_allowed)
   (2*logdet(U), sum(_square, y_mut_allowed))
@@ -14,35 +6,27 @@ end
 
 function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   checkthreads()
-  Z     = promote_type(H,T)
-  nthr  = Threads.nthreads()
-  ndata = size(V.data[1], 2)
-  (logdets, qforms) = _nll(V, params, Val(nthr), Val(Z))
+  Z       = promote_type(H,T)
+  ndata   = size(V.data[1], 2)
+  cpts_sz = V.chunksize*V.blockrank
+  pts_sz  = V.chunksize
+  nthr    = Threads.nthreads()
+  bufs    = allocate_cnll_bufs(nthr, Val(D), Val(Z), ndata, cpts_sz, pts_sz)
+  (logdets, qforms) = _nll(V, params, bufs) 
   (logdets*ndata + qforms)/2
 end
 
 function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}, 
-              ::Val{N}, ::Val{Z})::Tuple{Z,Z} where{H,D,F,T,N,Z}
-  kernel  = V.kernel
-  cpts_sz = V.chunksize*V.blockrank
-  pts_sz  = V.chunksize
-  ndata   = size(V.data[1], 2)
-  # pre-allocate all buffers:
-  bufs = allocate_cnll_bufs(Val(N), Val(D), Val(Z), ndata, cpts_sz, pts_sz)
-  # handle the first index base case:
-  (ld0, qf0) = negloglik(kernel, params, V.pts[1], V.data[1], bufs[1].buf_pp) 
-  # pre-allocate thread-arrays for the logdets and qforms:
-  out_logdet  = zeros(Z, N)
-  out_qforms  = zeros(Z, N)
-  out_logdet[1] = ld0
-  out_qforms[1] = qf0
-  # Now do the main loop for the rest of the terms, which are all conditional nlls.
+              bufs::Vector{CondLogLikBuf{D,Z}})::Tuple{Z,Z} where{H,D,F,T,Z}
+  kernel     = V.kernel
+  out_logdet = zeros(Z, length(bufs))
+  out_qforms = zeros(Z, length(bufs))
   # Note that I'm not just using Threads.@threads for [...] and then getting
   # buffers with bufs[Threads.threadid()], because this has the potential for
   # some soundness issues. Further reading:
   # https://discourse.julialang.org/t/behavior-of-threads-threads-for-loop/76042
-  m = cld(length(V.condix)-1, Threads.nthreads())
-  @sync for (i, chunk) in enumerate(Iterators.partition(2:length(V.condix), m))
+  m = cld(length(V.condix), Threads.nthreads())
+  @sync for (i, chunk) in enumerate(Iterators.partition(eachindex(V.condix), m))
     Threads.@spawn for j in chunk
       tbuf = bufs[i]
       pts  = V.pts[j]
