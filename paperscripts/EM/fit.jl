@@ -52,6 +52,7 @@ function estimate_index(j, sleeptime=45)
     kw = (:box_lower=>[1e-3, 1e-3, 0.4, 0.0],) 
     el = @elapsed est = em_estimate(cfg, saaj, ini; 
                                     #optimizer=_knitro_optimize_box,
+                                    errormodel=Vecchia.ScaledIdentity(15_000),
                                     optimizer_kwargs=kw,
                                     warn_optimizer=false, 
                                     warn_notation=false)
