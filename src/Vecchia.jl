@@ -11,7 +11,7 @@ module Vecchia
 
   # Not new dependencies, just bringing in modules in the namespace of existing
   # dependencies:
-  using JuMP.MathOptInterface
+  using MathOptInterface
   using ForwardDiff.DiffResults
   const MOI = MathOptInterface
 
