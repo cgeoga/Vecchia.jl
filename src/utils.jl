@@ -3,11 +3,12 @@ _square(x::Real) = x*x
 
 _mean(x) = sum(x)/length(x)
 
-function checkthreads()
+function checkthreads()::Nothing
   nthr = Threads.nthreads()
   if nthr > 1 && BLAS.get_num_threads() > 1
     @warn THREAD_WARN maxlog=1
   end
+  nothing
 end
 
 # A hacky function to return an empty Int64[] for the first conditioning set.

@@ -27,12 +27,9 @@ function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
   # https://discourse.julialang.org/t/behavior-of-threads-threads-for-loop/76042
   m = cld(length(V.condix), Threads.nthreads())
   @sync for (i, chunk) in enumerate(Iterators.partition(eachindex(V.condix), m))
+    tbuf = bufs[i]
     Threads.@spawn for j in chunk
-      tbuf = bufs[i]
-      pts  = V.pts[j]
-      dat  = V.data[j]
-      idxs = V.condix[j]
-      (ldj, qfj) = cnll_str(V, idxs, tbuf, pts, dat, params)
+      (ldj, qfj) = cnll_str(V, j, tbuf, params)
       out_logdet[i] += ldj
       out_qforms[i] += qfj
     end
@@ -40,8 +37,12 @@ function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T},
   sum(out_logdet), sum(out_qforms)
 end
 
-function cnll_str(V, idxs, strbuf::CondLogLikBuf{D,T}, pts, dat, params) where{D,T}
+function cnll_str(V::VecchiaConfig{H,D,F}, j::Int, 
+                  strbuf::CondLogLikBuf{D,T}, params) where{H,D,F,T}
   # prepare the marginal points and buffer:
+  pts    = V.pts[j]
+  dat    = V.data[j]
+  idxs   = V.condix[j]
   mdat   = view(strbuf.buf_mdat, 1:size(dat,1), :)
   mdat  .= dat
   cov_pp = view(strbuf.buf_pp, 1:length(pts),  1:length(pts))
