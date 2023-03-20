@@ -4,37 +4,32 @@ function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T
   (2*logdet(U), sum(_square, y_mut_allowed))
 end
 
-function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
-  checkthreads()
-  Z       = promote_type(H,T)
-  ndata   = size(V.data[1], 2)
-  cpts_sz = V.chunksize*V.blockrank
-  pts_sz  = V.chunksize
-  nthr    = Threads.nthreads()
-  bufs    = allocate_cnll_bufs(nthr, Val(D), Val(Z), ndata, cpts_sz, pts_sz)
-  (logdets, qforms) = _nll(V, params, bufs) 
-  (logdets*ndata + qforms)/2
+# see ./structstypes.jl for a def of the struct fields. But since this method is
+# the core logic for the nll function, I think it should live here.
+function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
+  out_logdet = zero(eltype(p))
+  out_qforms = zero(eltype(p))
+  for j in vp.ixrange
+    (ldj, qfj)  = cnll_str(vp.cfg, j, vp.buf, p)
+    out_logdet += ldj
+    out_qforms += qfj
+  end
+  (out_logdet*size(first(vp.cfg.data), 2) + out_qforms)/2
 end
 
-function _nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}, 
-              bufs::Vector{CondLogLikBuf{D,Z}})::Tuple{Z,Z} where{H,D,F,T,Z}
-  kernel     = V.kernel
-  out_logdet = zeros(Z, length(bufs))
-  out_qforms = zeros(Z, length(bufs))
-  # Note that I'm not just using Threads.@threads for [...] and then getting
-  # buffers with bufs[Threads.threadid()], because this has the potential for
-  # some soundness issues. Further reading:
-  # https://discourse.julialang.org/t/behavior-of-threads-threads-for-loop/76042
-  m = cld(length(V.condix), Threads.nthreads())
-  @sync for (i, chunk) in enumerate(Iterators.partition(eachindex(V.condix), m))
-    tbuf = bufs[i]
-    Threads.@spawn for j in chunk
-      (ldj, qfj) = cnll_str(V, j, tbuf, params)
-      out_logdet[i] += ldj
-      out_qforms[i] += qfj
-    end
+function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
+  checkthreads()
+  Z      = promote_type(H,T)
+  pieces = split_nll_pieces(V, Val(Z), Threads.nthreads())
+  _nll(pieces, params) 
+end
+
+function _nll(pieces, params)
+  out = zeros(eltype(params), length(pieces))
+  @sync for j in eachindex(pieces)
+    Threads.@spawn (out[j] = pieces[j](params))
   end
-  sum(out_logdet), sum(out_qforms)
+  sum(out)
 end
 
 function cnll_str(V::VecchiaConfig{H,D,F}, j::Int, 

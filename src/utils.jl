@@ -183,8 +183,19 @@ function globalidxs(datavv)
 end
 
 function allocate_cnll_bufs(N, ::Val{D}, ::Val{Z}, 
-                                       ndata, cpts_sz, pts_sz) where{D,Z}
+                            ndata, cpts_sz, pts_sz) where{D,Z}
   [cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz) for _ in 1:N]
+end
+
+function split_nll_pieces(V::VecchiaConfig{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
+  ndata   = size(first(V.data), 2)
+  cpts_sz = V.chunksize*V.blockrank
+  pts_sz  = V.chunksize
+  chunks  = Iterators.partition(eachindex(V.pts), cld(length(V.pts), m))
+  map(chunks) do chunk
+    local_buf = cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz)
+    VecchiaLikelihoodPiece(V, local_buf, chunk)
+  end
 end
 
 @generated function allocate_crchol_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 

@@ -76,6 +76,7 @@ end
 (m::LocalQuadraticApprox)(p) = m.fk + dot(m.gk, p) + dot(p, m.hk, p)/2
 
 
+
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
 # And having them sort of provides a dangerously easy option to not check and
@@ -96,6 +97,8 @@ function Base.display(V::VecchiaConfig)
   println("  - data size:  $(sum(x->size(x,1), V.data))")
   println("  - nsamples:   $(size(V.data[1], 2))")
 end
+
+
 
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
@@ -135,6 +138,19 @@ function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
   buf_mdat = Array{Z}(undef,  pts_sz, ndata)
   buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
   CondLogLikBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
+end
+
+# A piece of a Vecchia approximation with a single-argument method. Split up
+# like this because using ReverseDiff.gradient on the thread-parallel nll
+# doesn't work, and so breaking it into pieces like this means that I can more
+# easily compile tapes for the chunks that would each be evaluated on a single
+# thread, and then parallelize the calls to ReverseDiff.gradient!.
+#
+# see the method definition in ./nll.jl.
+struct VecchiaLikelihoodPiece{H,D,F,T} <: Function
+  cfg::VecchiaConfig{H,D,F}
+  buf::CondLogLikBuf{D,T}
+  ixrange::UnitRange{Int64}
 end
 
 struct CondRCholBuf{D,T}

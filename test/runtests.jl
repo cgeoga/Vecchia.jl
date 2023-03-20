@@ -1,6 +1,8 @@
 
 using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia, SparseArrays
 
+BLAS.set_num_threads(1)
+
 # TODO (cg 2022/12/23 15:18): 
 # 1) Any EM tests
 # 2) Any sqp/tr tests
