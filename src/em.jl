@@ -2,8 +2,8 @@
 # Putting the struct here instead of in structstypes.jl as a violation of my own
 # stye rules. It just only gets used here. Maybe there is a lesson about how to
 # organize code in this choice somewhere...
-struct ExpectedJointNll{C,R} <: Function
-  cfg::C
+struct ExpectedJointNll{H,D,F,R} <: Function
+  cfg::VecchiaConfig{H,D,F}
   errormodel::R
   data_minus_z0::Matrix{Float64}
   presolved_saa::Matrix{Float64}
@@ -12,18 +12,18 @@ end
 
 # Trying to move to callable structs instead of closures so that the
 # precompilation can be better...
-function (E::ExpectedJointNll{C})(p) where{C}
+function (E::ExpectedJointNll{H,D,F})(p::AbstractVector{T}) where{H,D,F,T}
   # Like with the normal nll function, this section handles the things that
   # create type instability, and then passes them to _nll so that the function
   # barrier means that everything _inside_ _nll, which we want to be fast and
   # multithreaded, is stable and non-allocating.
-  Z     = promote_type(eltype(first(E.cfg.data)), eltype(p))
-  nthr  = Threads.nthreads()
+  Z     = promote_type(H,T)
   ndata = size(E.data_minus_z0, 2)
   # compute the following terms at once using the augmented data:
   # - nll(V, z0)
   # - (2M)^{-1} sum_j \norm[2]{U(\p)^T v_j}^2, w/ v_j the pre-solved SAA.
-  (logdets, qforms) = _nll(E.cfg, p, Val(nthr), Val(Z))
+  pieces = split_nll_pieces(E.cfg, Val(Z), Threads.nthreads())
+  (logdets, qforms) = _nll(pieces, p)
   out  = (logdets*ndata + qforms)/2
   # add on the generic nll for the measurement noise and the quadratic forms
   # with the error matrix that contribute to the trace term. 

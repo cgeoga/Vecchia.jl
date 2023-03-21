@@ -14,22 +14,31 @@ function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
     out_logdet += ldj
     out_qforms += qfj
   end
-  (out_logdet*size(first(vp.cfg.data), 2) + out_qforms)/2
+  (out_logdet, out_qforms)
 end
 
 function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   checkthreads()
   Z      = promote_type(H,T)
+  ndata  = size(first(V.data), 2)
   pieces = split_nll_pieces(V, Val(Z), Threads.nthreads())
-  _nll(pieces, params) 
+  (logdets, qforms) = _nll(pieces, params) 
+  (logdets*ndata + qforms)/2
 end
 
-function _nll(pieces, params)
-  out = zeros(eltype(params), length(pieces))
+function _nll(pieces::Vector{VecchiaLikelihoodPiece{H,D,F,T}}, 
+              params) where{H,D,F,T}
+  logdets = zeros(eltype(params), length(pieces))
+  qforms  = zeros(eltype(params), length(pieces))
   @sync for j in eachindex(pieces)
-    Threads.@spawn (out[j] = pieces[j](params))
+    Threads.@spawn begin
+      pj = pieces[j]
+      (ldj, qfj) = pj(params)
+      logdets[j] = ldj
+      qforms[j]  = qfj
+    end
   end
-  sum(out)
+  (sum(logdets), sum(qforms))
 end
 
 function cnll_str(V::VecchiaConfig{H,D,F}, j::Int, 

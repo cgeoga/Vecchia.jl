@@ -147,10 +147,20 @@ end
 # thread, and then parallelize the calls to ReverseDiff.gradient!.
 #
 # see the method definition in ./nll.jl.
-struct VecchiaLikelihoodPiece{H,D,F,T} <: Function
+struct VecchiaLikelihoodPiece{H,D,F,T}
   cfg::VecchiaConfig{H,D,F}
   buf::CondLogLikBuf{D,T}
   ixrange::UnitRange{Int64}
+end
+
+struct PieceEvaluation{H,D,F,T} <: Function
+  piece::VecchiaLikelihoodPiece{H,D,F,T}
+end
+
+function (c::PieceEvaluation{H,D,F,T})(p) where{H,D,F,T}
+  (logdets, qforms) = c.piece(p)
+  ndata = size(first(c.piece.cfg.data), 2)
+  (ndata*logdets + qforms)/2
 end
 
 struct CondRCholBuf{D,T}
