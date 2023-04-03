@@ -119,8 +119,49 @@ function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
   out
 end
 
-function nll(U::RCholesky{T}, data::Matrix{Float64}) where{T}
-  -logdet(U) + sum(_square, U'*data)/2
+function nll(U::RCholesky{T}, data::AbstractVecOrMat{V}) where{T,V}
+  buffers = [RCholApplicationBuffer(U, size(data,2), Val(V)) 
+             for _ in 1:Threads.nthreads()]
+  (logdets, qforms) = _nll(U, buffers, data)
+  (logdets + qforms)/2
+end
+
+# Note that if the RChol factorization gives \Sigma^{-1} = U*U^T, then this
+# computes the nll with the logdet how you'd expect and the quadratic form
+# computed as sum(abs2, U^T*y). But I've squeezed all the allocations out of the
+# hot loop so that it can be parallelized, so each little piece of U^T*y is
+# computed in parallel (see _rchol_nll_term below for the code for an individual
+# term).
+function _nll(U::RCholesky{T}, buffers::Vector{RCholApplicationBuffer{V}},
+              data) where{T,V}
+  logdets = zeros(T, length(buffers))
+  qforms  = zeros(T, length(buffers))
+  m       = cld(length(U.condix), length(buffers))
+  chunks  = Iterators.partition(eachindex(U.condix), m)
+  @sync for (j, chunk) in enumerate(chunks)
+    buf = buffers[j]
+    Threads.@spawn for k in chunk
+      (ldk, qfk)  = _rchol_nll_term(U, buf, data, k)
+      logdets[j] += ldk
+      qforms[j]  += qfk
+    end
+  end
+  (sum(logdets), sum(qforms))
+end
+
+function _rchol_nll_term(U, buf, data, k)
+  ck   = U.condix[k]
+  ixk  = U.idxs[k]
+  out_mod_chunk = view(buf.out, 1:length(ixk), :)
+  mul!(out_mod_chunk, U.diagonals[k]', view(data, ixk, :))
+  isempty(ck) && return (-2*logdet(U.diagonals[k]), sum(_square, out_mod_chunk))
+  ixck = view(U.idxs, ck)
+  Bjt_chunk = U.odiagonals[k]
+  bufv_v = prepare_v_buf!(buf.bufv, data, ixck)
+  bufm_v = view(buf.bufm, 1:length(ixk), :)
+  mul!(bufm_v, Bjt_chunk', bufv_v)
+  out_mod_chunk .+= bufm_v
+  (-2*logdet(U.diagonals[k]), sum(_square, out_mod_chunk))
 end
 
 # This is really just for debugging.

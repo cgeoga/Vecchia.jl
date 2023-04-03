@@ -12,12 +12,13 @@ struct RCholApplicationBuffer{T}
   out::Matrix{T}
 end
 
-function RCholApplicationBuffer(U::RCholesky{T}, v::Matrix) where{T}
-  Z = promote_type(T, eltype(v))
-  out  = Array{Z}(undef, size(v))
-  bufz = Array{Z}(undef, size(v))
-  bufv = Array{Z}(undef, maximum(length, U.condix)*maximum(length, U.idxs), size(v,2))
-  bufm = Array{Z}(undef, maximum(length, U.idxs), size(v,2))
+function RCholApplicationBuffer(U::RCholesky{T}, ndata::Int64, ::Val{V}) where{T,V}
+  Z = promote_type(T, V)
+  m = length(U.condix)
+  out  = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufz = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufv = Array{Z}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
+  bufm = Array{Z}(undef, maximum(length, U.idxs), ndata)
   RCholApplicationBuffer{Z}(bufv, bufm, bufz, out)
 end
 

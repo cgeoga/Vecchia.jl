@@ -46,6 +46,6 @@ new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, kernel)
 
 # Test 7: confirm that the rchol-based nll is equal to the standard nll.
 println("Testing rchol nll...")
-rchol_nll = Vecchia.nll_rchol(vecc, ones(3); issue_warning=false)
+rchol_nll = Vecchia.nll_rchol(vecc, ones(3))
 @test isapprox(rchol_nll, Vecchia.nll(vecc, ones(3)))
 

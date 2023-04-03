@@ -190,6 +190,24 @@ end
 Base.display(U::RCholesky{T}) where{T} = println("RCholesky{$T}")
 Base.display(Ut::Adjoint{T,RCholesky{T}}) where{T} = println("Adjoint{$T, RCholesky{$T}}")
 
+# Pass this around instead?
+struct RCholApplicationBuffer{T}
+  bufv::Matrix{T}
+  bufm::Matrix{T}
+  bufz::Matrix{T}
+  out::Matrix{T}
+end
+
+function RCholApplicationBuffer(U::RCholesky{T}, ndata::Int64, ::Val{V}) where{T,V}
+  Z = promote_type(T, V)
+  m = length(U.condix)
+  out  = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufz = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufv = Array{Z}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
+  bufm = Array{Z}(undef, maximum(length, U.idxs), ndata)
+  RCholApplicationBuffer{Z}(bufv, bufm, bufz, out)
+end
+
 # Not good code or anything. Just a quick and dirty way to make a Vecchia object
 # with a KD-tree to choose the conditioning points.
 function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
