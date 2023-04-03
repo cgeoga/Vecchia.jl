@@ -205,6 +205,14 @@ end
   end
 end
 
+# I think I went a little overboard with the compile-time stuff above. This
+# allocation happens once in a function call that will take a long time for real
+# problems, so it doesn't seem worth the compiler stress.
+function allocate_crchol_bufs(n::Int64, ::Val{D}, ::Val{Z}, 
+                              cpts_sz, pts_sz) where{N,D,Z}
+  [crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz) for _ in 1:n]
+end
+
 function pretty_print_number(x)
   if x < zero(x)
     @printf "-%06.3f " abs(x)

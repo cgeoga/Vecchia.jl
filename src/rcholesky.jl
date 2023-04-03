@@ -37,8 +37,7 @@ end
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
 # here. Maybe I can pre-allocate things for the BLAS calls, even?
 function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
-                            params::AbstractVector{T}, 
-                            ::Val{Z}, ::Val{N}) where{H,D,F,T,Z,N}
+                            params::AbstractVector{T}, ::Val{Z}) where{H,D,F,T,Z}
   checkthreads()
   @assert !strbuf.is_instantiated[] RCHOL_INSTANTIATE_ERROR
   strbuf.is_instantiated[] = true
@@ -46,7 +45,7 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
   cpts_sz = V.chunksize*V.blockrank
   pts_sz  = V.chunksize
   # allocate three buffers:
-  bufs = allocate_crchol_bufs(Val(N), Val(D), Val(Z), cpts_sz, pts_sz)
+  bufs = allocate_crchol_bufs(Threads.nthreads(), Val(D), Val(Z), cpts_sz, pts_sz)
   # do the main loop:
   m = cld(length(V.condix), Threads.nthreads())
   @sync for (i, chunk) in enumerate(Iterators.partition(1:length(V.condix), m))
@@ -115,7 +114,7 @@ function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
   # compute the out type and the number of threads to pass in as vals:
   Z   = promote_type(H, T)
   N   = Threads.nthreads()
-  rchol_instantiate!(out, V, params, Val(Z), Val(N))
+  rchol_instantiate!(out, V, params, Val(Z))
   out
 end
 
