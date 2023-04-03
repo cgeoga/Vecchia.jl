@@ -208,6 +208,21 @@ function RCholApplicationBuffer(U::RCholesky{T}, ndata::Int64, ::Val{V}) where{T
   RCholApplicationBuffer{Z}(bufv, bufm, bufz, out)
 end
 
+# A struct wrapper of a function that handles argument splatting and also
+# "converts" errors to NaNs. Very useful when feeding NLPs to JuMP.
+struct WrapSplatted{F} <: Function
+  f::F
+end
+function (s::WrapSplatted{F})(p) where{F} 
+  try
+    return s.f(p)
+  catch er
+    er isa InterruptException && rethrow(er)
+    return NaN
+  end
+end
+(s::WrapSplatted{F})(p...) where{F} = s(collect(p))
+
 # Not good code or anything. Just a quick and dirty way to make a Vecchia object
 # with a KD-tree to choose the conditioning points.
 function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
