@@ -4,7 +4,7 @@ module Vecchia
   using JuMP
 
   # Lightweight dependencies:
-  using NearestNeighbors, StaticArrays, Ipopt, GPMaxlik, ForwardDiff#, SnoopPrecompile
+  using NearestNeighbors, StaticArrays, Ipopt, GPMaxlik, ForwardDiff#, PrecompileTools
 
   # Effectively or literally standard library dependencies:
   using Printf, LinearAlgebra, SparseArrays
@@ -39,7 +39,7 @@ module Vecchia
 
   include("ichol.jl")
 
-  #@precompile_all_calls begin
+  #@compile_workload begin
   #  include(@__DIR__()*"/precompile/precompile.jl")
   #end
 
