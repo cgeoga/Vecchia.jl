@@ -49,7 +49,7 @@ function estimate_index(j, sleeptime=45)
     # If you're using KNITRO, just set kw=() and un-comment the line that
     # defines optimizer=_knitro[...] below. If you're using the free
     # trust region optimizer I put into Vecchia.jl, no need to touch anything.
-    kw = (:box_lower=>[1e-3, 1e-3, 0.4, 0.0],) 
+    kw = (:box_lower=>[0.0, 0.0, 0.4, 0.0],) 
     el = @elapsed est = em_estimate(cfg, saaj, ini; 
                                     #optimizer=_knitro_optimize_box,
                                     errormodel=Vecchia.ScaledIdentity(15_000),
