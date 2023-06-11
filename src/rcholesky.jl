@@ -1,19 +1,4 @@
 
-# TODO (cg 2022/05/29 14:42): 
-#
-# 5. Longer-term, this constructor occasionally redundantly computes the
-#    cross-covariance for individual chunks (j,k), or at least has the potential
-#    to. It would be nice to offer users the option to allocate even more, but in
-#    doing so create a cache that computes all the pairwise cross-covariances once
-#    and only once, and then uses that cache to fill in chunks of the potentially
-#    blocked cross-covs that are used when your condix has more than a single past
-#    chunk in the conditioning sets.
-#
-#    This will probably not be earth-shattering in terms of perf unless the
-#    kernel is really expensive...but some kernels are pretty expensive. I
-#    frequently end up working with expensive kernels, even. So worth doing.
-#
-
 function prepare_diagonal_chunks(::Val{T}, sizes) where{T}
   map(sizes) do sz
     UpperTriangular{T, Matrix{T}}(I(sz))
@@ -37,7 +22,7 @@ end
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
 # here. Maybe I can pre-allocate things for the BLAS calls, even?
 function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
-                            params::AbstractVector{T}, ::Val{Z}) where{H,D,F,T,Z}
+                           params::AbstractVector{T}, ::Val{Z}, tiles) where{H,D,F,T,Z}
   checkthreads()
   @assert !strbuf.is_instantiated[] RCHOL_INSTANTIATE_ERROR
   strbuf.is_instantiated[] = true
@@ -59,21 +44,34 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
       cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
       if isempty(idxs)
         # In this special case, I actually can skip the lower triangle. 
-        updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
+        if tiles isa Nothing
+          updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
+        else
+          updatebuf_tiles!(cov_pp, tiles, j, j)
+        end
         cov_pp_f = cholesky!(Symmetric(cov_pp))
         buf      = strbuf.diagonals[1]
         ldiv!(cov_pp_f.U, buf)
       else
         # If the set of conditioning points is nonempty, then I'm going to use
         # an in-place mul! on this buffer, so I need to fill it all in.
-        updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
+        if tiles isa Nothing
+          updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
+        else
+          updatebuf_tiles!(cov_pp, tiles, j, j)
+        end
         # prepare conditioning points:
         cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
         # prepare and fill in the matrix buffers pertaining to the cond.  points:
         cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
         cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
-        updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
-        updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
+        if tiles isa Nothing
+          updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
+          updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
+        else
+          updatebuf_tiles!(cov_cc, tiles, idxs, idxs)
+          updatebuf_tiles!(cov_cp, tiles, idxs, j)
+        end
         # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
         # pieces, like the conditional covaraince of the prediction points. I
         # acknowledge that this is a little hard to read, but it really nicely cuts
@@ -104,7 +102,7 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
 end
 
 function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}; 
-               issue_warning=true) where{H,D,F,T}
+               issue_warning=true, use_tiles=false) where{H,D,F,T}
   if issue_warning
     notify_disable("issue_warning=false")
     @warn RCHOL_WARN maxlog=1
@@ -113,8 +111,9 @@ function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
   out = RCholesky_alloc(V, Val(T))
   # compute the out type and the number of threads to pass in as vals:
   Z   = promote_type(H, T)
-  N   = Threads.nthreads()
-  rchol_instantiate!(out, V, params, Val(Z))
+  # create tiles if requested:
+  tiles = use_tiles ? build_tiles(V, params, Val(Z)) : nothing
+  rchol_instantiate!(out, V, params, Val(Z), tiles)
   out
 end
 

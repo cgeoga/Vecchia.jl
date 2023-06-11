@@ -50,6 +50,23 @@ function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
   nothing
 end
 
+function updatebuf_tiles!(buf, tiles, jv, kv)
+  (start_i1, start_i2, s1, s2) = (1, 1, 0, 0)
+  for j in jv
+    start_i2 = 1
+    for k in kv
+      tilejk   = (j <= k) ? tiles[k,j] : tiles[j,k] # only make transpose on assign
+      (s1, s2) = size(tilejk)
+      (stop_i1, stop_i2) = (start_i1+s1-1, start_i2+s2-1)
+      bufview  = view(buf, start_i1:stop_i1, start_i2:stop_i2)
+      (j <= k) ? (bufview .= tilejk') : (bufview .= tilejk) 
+      start_i2 += s2
+    end
+    start_i1 += s1
+  end
+  nothing
+end
+
 # TODO (cg 2022/04/21 16:16): This is totally not good.
 function vec_of_vecs_to_matrows(vv)
   Matrix(reduce(hcat, vv)')
@@ -247,7 +264,7 @@ function update_tile_buffers!(bufs::Vector{Matrix{T}}, pts, kernel::F,
   nothing
 end
 
-function build_tiles(pts, condix, kernel::F, p::AbstractVector{T}) where{F,T}
+function build_tiles(pts, condix, kernel::F, p, ::Val{H}) where{F,H}
   # first, we need to create all relevant pairs of indices that need allocation.
   # This code isn't fast or smart, but it will never be the bottleneck, so whatever.
   req_pairs = mapreduce(vcat, enumerate(condix)) do (j,ix)
@@ -262,7 +279,7 @@ function build_tiles(pts, condix, kernel::F, p::AbstractVector{T}) where{F,T}
   bufs = map(req_pairs) do jk
     (ptj, ptk) = (pts[jk[1]], pts[jk[2]])
     (lj, lk)   = (length(ptj), length(ptk))
-    buf = Array{T}(undef, lj, lk)
+    buf = Array{H}(undef, lj, lk)
   end
   # now, in parallel, update the buffers. These inner calls to updatebuf! won't
   # allocate, so this parallel computation of the tiles should work quickly.
@@ -270,6 +287,6 @@ function build_tiles(pts, condix, kernel::F, p::AbstractVector{T}) where{F,T}
   CovarianceTiles(Dict(zip(req_pairs, bufs)))
 end
 
-function build_tiles(cfg::VecchiaConfig{H,D,F}, p::AbstractVector{T}) where{H,D,F,T}
-  build_tiles(cfg.pts, cfg.condix, cfg.kernel, p)
+function build_tiles(cfg::VecchiaConfig{H,D,F}, p, ::Val{Z}) where{H,D,F,Z}
+  build_tiles(cfg.pts, cfg.condix, cfg.kernel, p, Val(Z))
 end

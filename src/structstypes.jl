@@ -79,6 +79,11 @@ struct CovarianceTiles{T}
   store::Dict{Tuple{Int64, Int64}, Matrix{T}}
 end
 
+function Base.getindex(tiles::CovarianceTiles{T}, j::Int64, k::Int64) where{T}
+  store = tiles.store
+  haskey(store, (j,k)) && return store[(j,k)]
+  throw(error("No tile available for pair ($j, $k)."))
+end
 
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
 # here? Arguably the are redundant and encoded in the data/pts/condix values.
