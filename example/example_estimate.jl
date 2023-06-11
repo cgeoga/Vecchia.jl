@@ -15,5 +15,5 @@ const cfg = Vecchia.kdtreeconfig(sim, # your simulated data, a Matrix{Float64}.
 # Now just compute the estimator and let autodiff and Ipopt take care of the rest!
 # Note that you can provide kwargs here for the optimizer. But if you're
 # providing your own optimizer you're probably customizing more than that anyway.
-const estimator = vecchia_estimate(cfg, init[1:3], warn_box=false) 
+#const estimator = vecchia_estimate(cfg, init[1:3], warn_box=false) 
 

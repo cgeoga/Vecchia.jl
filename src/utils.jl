@@ -232,3 +232,44 @@ function pretty_print_vec(x, newline=false)
   nothing
 end
 
+function update_tile_buffers!(bufs::Vector{Matrix{T}}, pts, kernel::F,  
+                              indices::Vector{Tuple{Int64, Int64}}, p) where{T,F}
+  m = cld(length(bufs), Threads.nthreads())
+  index_chunks = Iterators.partition(eachindex(bufs), m)
+  @sync for ixs in index_chunks
+    Threads.@spawn for j in ixs
+      (_j,_k) = indices[j]
+      (ptj, ptk) = (pts[_j], pts[_k])
+      buf = bufs[j]
+      updatebuf!(buf, ptj, ptk, kernel, p, skipltri=false)
+    end
+  end
+  nothing
+end
+
+function build_tiles(pts, condix, kernel::F, p::AbstractVector{T}) where{F,T}
+  # first, we need to create all relevant pairs of indices that need allocation.
+  # This code isn't fast or smart, but it will never be the bottleneck, so whatever.
+  req_pairs = mapreduce(vcat, enumerate(condix)) do (j,ix)
+    isempty(ix) && return [(j,j)]
+    vcat((j,j), [(j, ixj) for ixj in ix])
+  end
+  # filter (j,k) to only keep pairs where j <= k, since by symmetry we only need one:
+  filter!(jk -> jk[1] >= jk[2], req_pairs)
+  # now remove duplicates:
+  unique!(req_pairs)
+  # now pre-allocate buffers for each tile:
+  bufs = map(req_pairs) do jk
+    (ptj, ptk) = (pts[jk[1]], pts[jk[2]])
+    (lj, lk)   = (length(ptj), length(ptk))
+    buf = Array{T}(undef, lj, lk)
+  end
+  # now, in parallel, update the buffers. These inner calls to updatebuf! won't
+  # allocate, so this parallel computation of the tiles should work quickly.
+  update_tile_buffers!(bufs, pts, kernel, req_pairs, p)
+  CovarianceTiles(Dict(zip(req_pairs, bufs)))
+end
+
+function build_tiles(cfg::VecchiaConfig{H,D,F}, p::AbstractVector{T}) where{H,D,F,T}
+  build_tiles(cfg.pts, cfg.condix, cfg.kernel, p)
+end

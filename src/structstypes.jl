@@ -75,6 +75,9 @@ struct LocalQuadraticApprox
 end
 (m::LocalQuadraticApprox)(p) = m.fk + dot(m.gk, p) + dot(p, m.hk, p)/2
 
+struct CovarianceTiles{T}
+  store::Dict{Tuple{Int64, Int64}, Matrix{T}}
+end
 
 
 # TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
