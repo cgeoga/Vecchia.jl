@@ -53,21 +53,21 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
       # get the buffer for this thread:
       tbuf = bufs[i]
       # get the data and points:
-      pts = V.pts[j]
-      dat = V.data[j]
+      idxs = V.condix[j]
+      pts  = V.pts[j]
+      dat  = V.data[j]
       cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
-      if isone(j)
+      if isempty(idxs)
         # In this special case, I actually can skip the lower triangle. 
         updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
         cov_pp_f = cholesky!(Symmetric(cov_pp))
         buf      = strbuf.diagonals[1]
         ldiv!(cov_pp_f.U, buf)
       else
-        # If j != 1, then I'm going to use an in-place mul! on this buffer, so I
-        # need to fill it all in.
+        # If the set of conditioning points is nonempty, then I'm going to use
+        # an in-place mul! on this buffer, so I need to fill it all in.
         updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
         # prepare conditioning points:
-        idxs = V.condix[j]
         cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
         # prepare and fill in the matrix buffers pertaining to the cond.  points:
         cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))

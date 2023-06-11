@@ -209,7 +209,7 @@ end
 # allocation happens once in a function call that will take a long time for real
 # problems, so it doesn't seem worth the compiler stress.
 function allocate_crchol_bufs(n::Int64, ::Val{D}, ::Val{Z}, 
-                              cpts_sz, pts_sz) where{N,D,Z}
+                              cpts_sz, pts_sz) where{D,Z}
   [crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz) for _ in 1:n]
 end
 
