@@ -50,7 +50,7 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
           updatebuf_tiles!(cov_pp, tiles, j, j)
         end
         cov_pp_f = cholesky!(Symmetric(cov_pp))
-        buf      = strbuf.diagonals[1]
+        buf      = strbuf.diagonals[j]
         ldiv!(cov_pp_f.U, buf)
       else
         # If the set of conditioning points is nonempty, then I'm going to use
