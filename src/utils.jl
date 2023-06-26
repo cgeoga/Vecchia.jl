@@ -108,19 +108,19 @@ function updatedatbuf!(datbuf, datvm, idxs)
 end
 
 # Not a clever function at all,
-function rchol_nnz(U::RCholesky{T}) where{T}
+function _nnz(vchunks, condix)
   # diagonal elements:
-  out = sum(U.idxs) do ix
-    n = length(ix)
+  out = sum(vchunks) do piece
+    n = length(piece)
     div(n*(n+1), 2)
   end
   # off-diagonal elements:
-  out += sum(enumerate(U.condix)) do (j,ix_c)
+  out += sum(enumerate(condix)) do (j,ix_c)
     isempty(ix_c) && return 0
     tmp = 0
-    len = length(U.idxs[j])
+    len = length(vchunks[j])
     for ix in ix_c
-      @inbounds tmp += len*length(U.idxs[ix]) 
+      @inbounds tmp += len*length(vchunks[ix]) 
     end
     tmp
   end
@@ -249,22 +249,7 @@ function pretty_print_vec(x, newline=false)
   nothing
 end
 
-function update_tile_buffers!(bufs::Vector{Matrix{T}}, pts, kernel::F,  
-                              indices::Vector{Tuple{Int64, Int64}}, p) where{T,F}
-  m = cld(length(bufs), Threads.nthreads())
-  index_chunks = Iterators.partition(eachindex(bufs), m)
-  @sync for ixs in index_chunks
-    Threads.@spawn for j in ixs
-      (_j,_k) = indices[j]
-      (ptj, ptk) = (pts[_j], pts[_k])
-      buf = bufs[j]
-      updatebuf!(buf, ptj, ptk, kernel, p, skipltri=false)
-    end
-  end
-  nothing
-end
-
-function build_tiles(pts, condix, kernel::F, p, ::Val{H}) where{F,H}
+function alloc_tiles(pts, condix, ::Val{H}) where{H}
   # first, we need to create all relevant pairs of indices that need allocation.
   # This code isn't fast or smart, but it will never be the bottleneck, so whatever.
   req_pairs = mapreduce(vcat, enumerate(condix)) do (j,ix)
@@ -281,12 +266,32 @@ function build_tiles(pts, condix, kernel::F, p, ::Val{H}) where{F,H}
     (lj, lk)   = (length(ptj), length(ptk))
     buf = Array{H}(undef, lj, lk)
   end
-  # now, in parallel, update the buffers. These inner calls to updatebuf! won't
-  # allocate, so this parallel computation of the tiles should work quickly.
-  update_tile_buffers!(bufs, pts, kernel, req_pairs, p)
-  CovarianceTiles(Dict(zip(req_pairs, bufs)))
+  (req_pairs, bufs) 
+end
+
+function update_tile_buffers!(tiles::CovarianceTiles{T}, pts, kernel::F, 
+                              indices::Vector{Tuple{Int64, Int64}}, p) where{T,F}
+  store = tiles.store
+  m = cld(length(store), Threads.nthreads())
+  index_chunks = Iterators.partition(eachindex(indices), m)
+  @sync for ixs in index_chunks
+    Threads.@spawn for j in ixs
+      (_j, _k)   = indices[j]
+      (ptj, ptk) = (pts[_j], pts[_k])
+      buf = store[(_j,_k)]
+      updatebuf!(buf, ptj, ptk, kernel, p, skipltri=false)
+    end
+  end
+  tiles
+end
+
+function build_tiles(pts, condix, kernel::F, p, ::Val{H}) where{F,H}
+  (req_pairs, bufs) = alloc_tiles(pts, condix, Val(H))
+  tiles = CovarianceTiles(Dict(zip(req_pairs, bufs)))
+  update_tile_buffers!(tiles, pts, kernel, req_pairs, p)
 end
 
 function build_tiles(cfg::VecchiaConfig{H,D,F}, p, ::Val{Z}) where{H,D,F,Z}
   build_tiles(cfg.pts, cfg.condix, cfg.kernel, p, Val(Z))
 end
+

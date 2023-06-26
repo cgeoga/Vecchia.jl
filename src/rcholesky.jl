@@ -181,7 +181,7 @@ end
 # Transducers ecosystem (@floop, append!!, push!!, etc) to see if a parallel
 # constructor works faster, even though it will allocate much more.
 function SparseArrays.sparse(U::RCholesky{T}) where{T}
-  master_len = rchol_nnz(U)
+  master_len = _nnz(U.idxs, U.condix)
   Iv = Vector{Int64}(undef, master_len)
   Jv = Vector{Int64}(undef, master_len)
   Vv = Vector{T}(undef, master_len)

@@ -21,8 +21,6 @@ module Vecchia
 
   include("structstypes.jl")
 
-  #include("methods.jl")
-
   include("utils.jl")
 
   include("nll.jl")

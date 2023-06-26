@@ -26,26 +26,37 @@ sim    = randn(rng, length(pts))
 # likelihood evaluation is exact.
 vecc       = Vecchia.kdtreeconfig(sim, pts, 5, 3, kernel)
 vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
-#const vecc_s     = Vecchia.scalarize(vecc, kernel_scalar)
 
 # Test 1: nll gives the exact likelihood for a vecchia config where the
 # conditioning set is every prior point.
-println("testing nll...")
+@testset "nll" begin
 vecchia_nll  = nll(vecc_exact, ones(3))
 debug_nll    = exact_nll(vecc_exact, ones(3))
 @test isapprox(vecchia_nll, debug_nll)
+end
 
 # Test 5: the nll with multiple data sources agrees with the sum of two
 # single-data nlls.
-println("Testing multiple data nll...")
+@testset "multiple data nll" begin
 new_data  = range(0.0, 1.0, length=length(sim))
 joint_cfg = Vecchia.kdtreeconfig(hcat(sim, new_data), pts, 5, 3, kernel)
 new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, kernel)
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
                Vecchia.nll(vecc, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
+end
 
 # Test 7: confirm that the rchol-based nll is equal to the standard nll.
-println("Testing rchol nll...")
-rchol_nll = Vecchia.nll_rchol(vecc, ones(3))
+@testset "rchol nll" begin
+rchol_nll = Vecchia.nll_rchol(vecc, ones(3), issue_warning=false)
 @test isapprox(rchol_nll, Vecchia.nll(vecc, ones(3)))
+end
+
+# Test 8: confirm that the rchol built with tiles and without tiles gives the
+# same result:
+@testset "rchol tiles" begin
+U = Vecchia.rchol(vecc, ones(3), issue_warning=false)
+U_tiles = Vecchia.rchol(vecc, ones(3), use_tiles=true, issue_warning=false)
+@test U.diagonals == U_tiles.diagonals
+@test U.odiagonals == U_tiles.odiagonals
+end
 
