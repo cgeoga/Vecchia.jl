@@ -127,6 +127,11 @@ function _nnz(vchunks, condix)
   out
 end
 
+function generic_dense_nll(S, data)
+  Sf = cholesky(Symmetric(S))
+  (logdet(Sf) + sum(abs2, Sf.U'\data))/2
+end
+
 generic_nll(R::Diagonal, data)  = 0.5*(logdet(R) + dot(data, R\data))
 
 function generic_nll(R::UniformScaling, data)  
@@ -143,8 +148,7 @@ function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)),
     notify_disable("warn_box=false")
     @warn BOUNDS_WARN maxlog=1
   end
-  optimizer(likelihood, init; box_lower=fill(1e-5, length(init)), 
-            optimizer_kwargs...)
+  optimizer(likelihood, init; box_lower=box_lower,  optimizer_kwargs...)
 end
 
 function exact_estimate(cfg, init; errormodel=nothing, 
