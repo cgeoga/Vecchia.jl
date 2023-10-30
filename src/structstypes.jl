@@ -30,7 +30,7 @@ end
 function (f::AutoFwdfgh{F,R})(x) where{F,R}
   ForwardDiff.hessian!(f.res, f.f, x)
   (DiffResults.value(f.res), DiffResults.gradient(f.res), 
-   Symmetric(DiffResults.hessian(f.res)))
+   Hermitian(DiffResults.hessian(f.res)))
 end
 
 struct AutoFwdBFGS{F,R}
@@ -64,14 +64,14 @@ function (f::AutoFwdBFGS{F,R})(x) where{F,R}
   # update the xm1:
   f.xm1 .= x
   # return everything:
-  (DiffResults.value(f.res), f.g, Symmetric(f.B))
+  (DiffResults.value(f.res), f.g, Hermitian(f.B))
 end
 
 # Writing a local quadratic approximation struct to avoid creating a closure.
 struct LocalQuadraticApprox
   fk::Float64
   gk::Vector{Float64}
-  hk::Symmetric{Float64, Matrix{Float64}}
+  hk::Hermitian{Float64, Matrix{Float64}}
 end
 (m::LocalQuadraticApprox)(p) = m.fk + dot(m.gk, p) + dot(p, m.hk, p)/2
 
@@ -90,8 +90,6 @@ end
 # And having them sort of provides a dangerously easy option to not check and
 # make sure what those sizes really need to be.
 struct VecchiaConfig{H,D,F} <: AbstractVecchiaConfig{H,D,F}
-  chunksize::Int64
-  blockrank::Int64
   kernel::F
   data::Vector{Matrix{H}}
   pts::Vector{Vector{SVector{D, Float64}}}
@@ -100,33 +98,10 @@ end
 
 function Base.display(V::VecchiaConfig)
   println("Vecchia configuration with:")
-  println("  - chunksize:  $(V.chunksize)")
-  println("  - block rank: $(V.blockrank)")
+  println("  - chunksize:  $(chunksize(V))")
+  println("  - block rank: $(blockrank(V))")
   println("  - data size:  $(sum(x->size(x,1), V.data))")
   println("  - nsamples:   $(size(V.data[1], 2))")
-end
-
-
-
-# TODO (cg 2021/04/25 13:06): should these fields chunksize and blockrank be in
-# here? Arguably the are redundant and encoded in the data/pts/condix values.
-# And having them sort of provides a dangerously easy option to not check and
-# make sure what those sizes really need to be.
-struct ScalarVecchiaConfig{H,D,F} <: AbstractVecchiaConfig{H,D,F}
-  chunksize::Int64
-  blockrank::Int64
-  kernel::F
-  data::Vector{Matrix{H}}
-  pts::Vector{Vector{Float64}}
-  condix::Vector{Vector{Int64}} 
-end
-
-function Base.display(V::ScalarVecchiaConfig)
-  println("Scalarized Vecchia configuration with:")
-  println("chunksize:  $(V.chunksize)")
-  println("block rank: $(V.blockrank)")
-  println("data size:  $(sum(x->size(x,1), V.data))")
-  println("nsamples:   $(size(V.data[1], 2))")
 end
 
 struct CondLogLikBuf{D,T}
@@ -235,6 +210,7 @@ end
 # with a KD-tree to choose the conditioning points.
 function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   (data isa Vector) && return kdtreeconfig(hcat(data), pts, chunksize, blockrank, kfun)
+  size(data, 1) == length(pts) || @warn "Your input data and points don't have the same length. Consider checking your code for mistakes."
   # Make a KDTree of the points with a certain leaf size
   tree    = KDTree(pts, leafsize=chunksize)
   # re-order the data accordingly:
@@ -258,9 +234,7 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   # Create the conditioning meta-indices for the chunks.
   condix  = [cond_ixs(j,blockrank) for j in eachindex(pts_out)]
   (H,D,F) = (eltype(data), length(first(pts)), typeof(kfun))
-  VecchiaConfig{H,D,F}(min(chunksize, length(first(pts_out))),
-                       min(blockrank, length(pts_out)),
-                       kfun, dat_out, pts_out, condix)
+  VecchiaConfig{H,D,F}(kfun, dat_out, pts_out, condix)
 end
 
 function nosortknnconfig(data, pts, blockranks, kfun)
@@ -275,7 +249,7 @@ function nosortknnconfig(data, pts, blockranks, kfun)
   end
   pts = [[x] for x in pts]
   dat = map(x->Matrix(x'), eachrow(data))
-  VecchiaConfig(1, maximum(blockranks), kfun, dat, pts, condix)
+  VecchiaConfig(kfun, dat, pts, condix)
 end
 
 function nosortknnconfig(data, pts, blockrank::Int64, kfun)

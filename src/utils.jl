@@ -1,5 +1,6 @@
 
 _square(x::Real) = x*x
+_square(x::Complex) = real(x*conj(x))
 
 _mean(x) = sum(x)/length(x)
 
@@ -10,6 +11,9 @@ function checkthreads()::Nothing
   end
   nothing
 end
+
+blockrank(cfg::VecchiaConfig) = maximum(length, cfg.condix)
+chunksize(cfg::VecchiaConfig) = maximum(length, cfg.pts)
 
 # A hacky function to return an empty Int64[] for the first conditioning set.
 @inline cond_ixs(j, r) = j == 1 ? Int64[] : collect(max(1,j-r):max(1,j-1))
@@ -128,7 +132,7 @@ function _nnz(vchunks, condix)
 end
 
 function generic_dense_nll(S, data)
-  Sf = cholesky(Symmetric(S))
+  Sf = cholesky(Hermitian(S))
   (logdet(Sf) + sum(abs2, Sf.U'\data))/2
 end
 
@@ -171,8 +175,7 @@ end
 function vecchia_estimate_nugget(cfg, init, optimizer, errormodel; 
                                  optimizer_kwargs...)
   nugkernel = ErrorKernel(cfg.kernel, errormodel) 
-  nug_cfg   = Vecchia.VecchiaConfig(cfg.chunksize, cfg.blockrank,
-                                    nugkernel, cfg.data, cfg.pts, cfg.condix)
+  nug_cfg   = Vecchia.VecchiaConfig(nugkernel, cfg.data, cfg.pts, cfg.condix)
   likelihood = WrappedLogLikelihood(nug_cfg)
   optimizer(likelihood, init; optimizer_kwargs...)
 end
@@ -189,8 +192,7 @@ function augmented_em_cfg(V::VecchiaConfig{H,D,F}, z0, presolved_saa) where{H,D,
   new_data = map(chunksix) do ixj
     hcat(z0[ixj,:], presolved_saa[ixj,:])
   end
-  Vecchia.VecchiaConfig{H,D,F}(V.chunksize, V.blockrank, V.kernel, 
-                               new_data, V.pts, V.condix)
+  Vecchia.VecchiaConfig{H,D,F}(V.kernel, new_data, V.pts, V.condix)
 end
 
 function globalidxs(datavv)
@@ -210,8 +212,8 @@ end
 
 function split_nll_pieces(V::VecchiaConfig{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
   ndata   = size(first(V.data), 2)
-  cpts_sz = V.chunksize*V.blockrank
-  pts_sz  = V.chunksize
+  cpts_sz = chunksize(V)*blockrank(V)
+  pts_sz  = chunksize(V)
   chunks  = Iterators.partition(eachindex(V.pts), cld(length(V.pts), m))
   map(chunks) do chunk
     local_buf = cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz)

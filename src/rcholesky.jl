@@ -21,14 +21,14 @@ end
 
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
 # here. Maybe I can pre-allocate things for the BLAS calls, even?
-function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
+function rchol_instantiate!(strbuf::RCholesky, V::VecchiaConfig{H,D,F},
                            params::AbstractVector{T}, ::Val{Z}, tiles) where{H,D,F,T,Z}
   checkthreads()
   @assert !strbuf.is_instantiated[] RCHOL_INSTANTIATE_ERROR
   strbuf.is_instantiated[] = true
   kernel  = V.kernel
-  cpts_sz = V.chunksize*V.blockrank
-  pts_sz  = V.chunksize
+  cpts_sz = chunksize(V)*blockrank(V)
+  pts_sz  = chunksize(V)
   # allocate three buffers:
   bufs = allocate_crchol_bufs(Threads.nthreads(), Val(D), Val(Z), cpts_sz, pts_sz)
   # do the main loop:
@@ -49,7 +49,7 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
         else
           updatebuf_tiles!(cov_pp, tiles, j, j)
         end
-        cov_pp_f = cholesky!(Symmetric(cov_pp))
+        cov_pp_f = cholesky!(Hermitian(cov_pp))
         buf      = strbuf.diagonals[j]
         ldiv!(cov_pp_f.U, buf)
       else
@@ -77,11 +77,11 @@ function rchol_instantiate!(strbuf::RCholesky{T}, V::VecchiaConfig{H,D,F},
         # acknowledge that this is a little hard to read, but it really nicely cuts
         # out all the unnecessary allocations. If you do a manual check, you can
         # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
-        cov_cc_f = cholesky!(Symmetric(cov_cc))
+        cov_cc_f = cholesky!(Hermitian(cov_cc))
         ldiv!(cov_cc_f.U', cov_cp)
         mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(Z), one(Z))
         ldiv!(cov_cc_f.U, cov_cp)
-        Djf = cholesky!(Symmetric(cov_pp))
+        Djf = cholesky!(Hermitian(cov_pp))
         # Update the struct buffers. Note that the diagonal elements are actually
         # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
         # hack of directly working with the data buffer backing the UpperTriangular
@@ -108,7 +108,7 @@ function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T};
     @warn RCHOL_WARN maxlog=1
   end
   # allocate:
-  out = RCholesky_alloc(V, Val(T))
+  out = RCholesky_alloc(V, Val(promote_type(T,H)))
   # compute the out type and the number of threads to pass in as vals:
   Z   = promote_type(H, T)
   # create tiles if requested:

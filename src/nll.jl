@@ -53,7 +53,7 @@ function cnll_str(V::VecchiaConfig{H,D,F}, j::Int,
   updatebuf!(cov_pp,  pts,  pts, V.kernel, params, skipltri=false)
   # if the conditioning set is empty, just return the marginal nll:
   if isempty(idxs)
-    cov_pp_f = cholesky!(Symmetric(cov_pp))
+    cov_pp_f = cholesky!(Hermitian(cov_pp))
     return negloglik(cov_pp_f.U, mdat)
   end
   # otherwise, proceed and prepare conditioning points:
@@ -65,7 +65,7 @@ function cnll_str(V::VecchiaConfig{H,D,F}, j::Int,
   updatebuf!(cov_cc, cpts, cpts, V.kernel, params, skipltri=true)
   updatebuf!(cov_cp, cpts,  pts, V.kernel, params, skipltri=false)
   # Factorize the covariance matrix for the conditioning points:
-  cov_cc_f = cholesky!(Symmetric(cov_cc))
+  cov_cc_f = cholesky!(Hermitian(cov_cc))
   # Before mutating the cross-covariance buffer, compute y - hat{y}, where
   # hat{y} is the conditional expectation of y given the conditioning data.
   ldiv!(cov_cc_f, cdat)
@@ -74,7 +74,7 @@ function cnll_str(V::VecchiaConfig{H,D,F}, j::Int,
   # out any unnecessary allocations.
   ldiv!(cov_cc_f.U', cov_cp)
   mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(T), one(T))
-  cov_pp_cond = cholesky!(Symmetric(cov_pp))
+  cov_pp_cond = cholesky!(Hermitian(cov_pp))
   # compute the log-likelihood:
   negloglik(cov_pp_cond.U, mdat)
 end

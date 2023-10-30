@@ -43,7 +43,7 @@ function prepare_z0_SR0(cfg, arg, data, errormodel)
   n    = size(data, 1)
   Rinv = error_precision(errormodel, arg)
   U    = sparse(Vecchia.rchol(cfg, arg, issue_warning=false))
-  SR   = Symmetric(U*U' + Rinv) 
+  SR   = Hermitian(U*U' + Rinv) 
   SRf  = cholesky(SR, perm=n:-1:1) # for now
   (SRf\(Rinv*data), SRf)
 end
