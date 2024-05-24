@@ -52,7 +52,7 @@ end
 # cheap by comparison. So it is my hope/expectation, which has been sort of born
 # out through my own ad-hoc testing, that it can save at least a few iterations
 # total to do this exactly.
-function solve_qp(xk, gk, hk::Symmetric, delta, 
+function solve_qp(xk, gk, hk::Hermitian, delta, 
                   box_lower, box_upper, iter)
   try
     n   = length(xk)
@@ -98,7 +98,7 @@ function sqptr_optimize(f, init;
     catch er
       return failureresult(:FGH_ERROR, x0, j, er)
     end
-    mk  = LocalQuadraticApprox(fk, gk, Symmetric(hk))
+    mk  = LocalQuadraticApprox(fk, gk, Hermitian(hk))
     rho = 0.0
     while rho < args[:eta]
       vrb && print(".")
