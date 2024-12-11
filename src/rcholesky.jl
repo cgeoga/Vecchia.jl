@@ -40,7 +40,6 @@ function rchol_instantiate!(strbuf::RCholesky, V::VecchiaConfig{H,D,F},
       # get the data and points:
       idxs = V.condix[j]
       pts  = V.pts[j]
-      dat  = V.data[j]
       cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
       if isempty(idxs)
         # In this special case, I actually can skip the lower triangle. 

@@ -60,3 +60,22 @@ U_tiles = Vecchia.rchol(vecc, ones(3), use_tiles=true, issue_warning=false)
 @test U.odiagonals == U_tiles.odiagonals
 end
 
+# Test 9: make sure the Vecchia-based conditional distributions agree with the
+# exact ones when you condition on every prior point.
+@testset "conditional distributions" begin
+  pts  = rand(SVector{2,Float64}, 30)
+  ppts = rand(SVector{2,Float64}, 10)
+  data = cholesky([kernel(x, y, (1.0, 0.1)) for x in pts, y in pts]).L*randn(length(pts))
+
+  cfg  = Vecchia.nosortknnconfig(data, pts, 50, kernel)
+  (test_cond_mean, test_cond_var) = Vecchia.posterior_cov(cfg, [1.0, 0.1], ppts, ncondition=50)
+
+  S1   = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in pts]
+  S12  = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in ppts]
+  S2   = [kernel(x, y, (1.0, 0.1)) for x in ppts, y in ppts]
+
+  # test 1: conditional mean.
+  @test test_cond_mean ≈ S12'*(S1\data)    
+  @test test_cond_var  ≈ S2 - S12'*(S1\S12)
+end
+

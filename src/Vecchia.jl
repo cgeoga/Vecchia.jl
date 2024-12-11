@@ -37,6 +37,8 @@ module Vecchia
 
   include("ichol.jl")
 
+  include("predict_sim.jl")
+
   #@compile_workload begin
   #  include(@__DIR__()*"/precompile/precompile.jl")
   #end
