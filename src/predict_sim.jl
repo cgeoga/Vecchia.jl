@@ -27,7 +27,7 @@ function posterior_cov(vc::VecchiaConfig{H,D,F}, params,
   # need to compute Σ [e_{n+1}, ..., e_{n+m}], where e_j is the coordinate
   # vector of zeros except e_j[j] = 1.0, n is the number of observed points, and
   # m is the number of prediction points.
-  Us     = sparse(rchol(jcfg, params))
+  Us     = UpperTriangular(sparse(rchol(jcfg, params)))
   em     = zeros(m+n, m)
   foreach(j->(em[n+j,j] = 1.0), 1:m)
   cols   = adjoint(Us)\(Us\em)
@@ -35,7 +35,7 @@ function posterior_cov(vc::VecchiaConfig{H,D,F}, params,
   pred_pts_cross    = cols[1:n, :]
   # finally, to get the inverse of the covariance of the data we have observed,
   # that can be applied with just the [1:n, 1:n] block of Us.
-  Usnn = Us[1:n, 1:n]
+  Usnn = UpperTriangular(Us[1:n, 1:n])
   solved_cross = Usnn*(Usnn'*pred_pts_cross) # Σ_{data}^{-1} Σ_{cross}
   cond_mean    = solved_cross'*reduce(vcat, vc.data)
   cond_var     = pred_pts_marginal - solved_cross'pred_pts_cross
