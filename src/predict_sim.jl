@@ -1,7 +1,7 @@
 
-function posterior_cov(vc::VecchiaConfig{H,D,F}, params,
-                       pred_pts::Vector{SVector{D,Float64}};
-                       ncondition=maximum(length, vc.condix)) where{H,D,F}
+function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
+                         pred_pts::Vector{SVector{D,Float64}};
+                         ncondition=maximum(length, vc.condix)) where{H,D,F}
   # get the given data points and make a tree for fast conditioning set
   # collection.
   (n, m) = (sum(length, vc.pts), length(pred_pts))
@@ -41,5 +41,43 @@ function posterior_cov(vc::VecchiaConfig{H,D,F}, params,
   cond_var     = pred_pts_marginal - solved_cross'pred_pts_cross
   # return:
   (;cond_mean, cond_var)
+end
+
+
+function cond_sim(vc::Vecchia.VecchiaConfig{H,D,F}, params,
+                  pred_pts::Vector{SVector{D,Float64}};
+                  ncondition=maximum(length, vc.condix)) where{H,D,F}
+  if ncondition < 30
+    @warn "For small numbers of conditioning points (<= 30 from slight anecdata), this method can give poor results. See issue #10 on github for more details." 
+  end
+  # get the given data points and make a tree for fast conditioning set
+  # collection.
+  (n, m) = (sum(length, vc.pts), length(pred_pts))
+  pts    = reduce(vcat, vc.pts)
+  # create the new conditioning set elements for the joint configuration of
+  # given and prediction points.
+  jcondix = copy(vc.condix)
+  sizehint!(jcondix, length(vc.condix) + length(pred_pts)) # could also pre-allocate
+  # TODO (cg 2024/12/27 10:17): I really would like to switch to a dynamic tree
+  # object for kNN queries. I expect that that is the clear bottleneck here.
+  for k in eachindex(pred_pts)
+    tree       = KDTree(vcat(pts, pred_pts[1:(k-1)]))
+    k_cond_ixs = NearestNeighbors.knn(tree, pred_pts[k], min(ncondition, n+(k-1)))[1]
+    sort!(k_cond_ixs)
+    push!(jcondix, k_cond_ixs)
+  end
+  # create the augmented/joint point list (for now, just singleton predictions):
+  jpts  = vcat(vc.pts, [[x] for x in pred_pts])
+  # create the final joint config object. The data being passed in here isn't a
+  # compliant size, but we'll never touch it.
+  jcfg  = Vecchia.VecchiaConfig(vc.kernel, [hcat(NaN) for _ in eachindex(jpts)], 
+                                jpts, jcondix)
+  Us    = sparse(Vecchia.rchol(jcfg, params))
+  Usnn  = Us[1:n, 1:n]
+  # conditional simulation using standard tricks with Cholesky factors:
+  data  = reduce(vcat, vc.data)
+  rawwn = randn(length(pred_pts), size(data, 2))
+  jwn   = vcat(Usnn'*data, rawwn)
+  sims=(Us'\jwn)[(n+1):end, :]
 end
 

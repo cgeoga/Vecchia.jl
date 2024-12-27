@@ -68,7 +68,7 @@ end
   data = cholesky([kernel(x, y, (1.0, 0.1)) for x in pts, y in pts]).L*randn(length(pts))
 
   cfg  = Vecchia.nosortknnconfig(data, pts, 50, kernel)
-  (test_cond_mean, test_cond_var) = Vecchia.posterior_cov(cfg, [1.0, 0.1], ppts, ncondition=50)
+  (test_cond_mean, test_cond_var) = Vecchia.dense_posterior(cfg, [1.0, 0.1], ppts, ncondition=50)
 
   S1   = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in pts]
   S12  = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in ppts]

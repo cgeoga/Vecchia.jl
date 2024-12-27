@@ -195,6 +195,42 @@ really need them myself (at least, not beyond what I can do with this current
 pattern) so I'm not feeling super motivated to think hard about the best design
 choice.
 
+# Wanted/planned changes (contributions welcome!)
+
+- More docstrings!
+- Move several deps to weakdeps. Really, this package should only have
+  non-stdlib deps of `StaticArrays` and `NearestNeighbors` (or some other kNN
+  package, see below). All the other deps have to do with estimation, but with
+  the extension system those could be moved out of the `[deps]` and the package
+  could be made a lot leaner. This is purely an issue of finding the
+  time---basically no engineering is required here.
+- Changing from `NearestNeighbors.KDTree` to a dynamic object for kNN queries.
+  As of now, for configurations that pick conditioning points based on nearest
+  neighbors, an entirely new static tree is constructed in each iteration when a
+  new point gets added. This isn't actually as slow as you would think because
+  `NearestNeighbors` is so darn fast, but obviously this can and should be
+  approved. The ideal alternative is some data structure that takes
+  `SVector{D,Float64}`s and rebalances to keep a O(k log n) worst-case query. A
+  real dream would be for the query to also be non-allocating to open the door for
+  parallelization, but even a fast dynamic tree object would be a big improvement.
+- Conditional simulations were recently added, but that implementation would
+  hugely benefit from somebody kicking the tires and playing with details and
+  smart defaults/guardrails.
+- It would be interesting to at some point benchmark the potential improvement
+  from using memoization for kernel evaluations. In the rchol approach, there is
+  the `use_tiles={true,false}` kwarg, which effectively does manual book-keeping
+  to avoid ever evaluating the kernel for the same pair of points twice. But it
+  may be more elegant and just as fast to use memoization. This is probably
+  10-20 lines of code and an hour to benchmark and play with, so it would be a
+  great first way to tinker with Vecchia stuff.
+- API refinement/seeking feedback. For the most part, it is me and students in
+  my orbit that use this package. But I'd love for it to be more widely adopted,
+  and so I'd love for the interface to be polished. For example: figuring out
+  how best to more properly support mean functions would be nice. Another
+  example: I've just put a bunch of print warnings in the code about permutation
+  footguns. But obviously it would be better to just somehow design the
+  interface that there is no chance of a user getting mixed up by that.
+
 # Citation
 
 If you use this software in your work, **particularly if you actually use

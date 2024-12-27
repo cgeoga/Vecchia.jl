@@ -1,7 +1,7 @@
 name = "Vecchia"
 uuid = "8d73829f-f4b0-474a-9580-cecc8e084068"
 authors = ["Chris Geoga <christopher.geoga@rutgers.edu>"]
-version = "0.9.12"
+version = "0.9.13"
 
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
