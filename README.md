@@ -48,7 +48,9 @@ const cfg = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, k
 # Estimate like so, with the default optimizer being Ipopt and using autodiff
 # for all gradients and Hessians. TRUE Hessians are used in this estimation by
 # default, not expected Fisher matrices.
-mle = vecchia_estimate(cfg, some_init)
+using JuMP, Ipopt
+solver = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-4)
+mle    = vecchia_estimate(cfg, some_init, solver)
 ```
 
 **See the example files for a heavily commented demonstration.**
