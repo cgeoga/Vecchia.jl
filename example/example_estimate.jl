@@ -1,4 +1,6 @@
 
+using JuMP, Ipopt
+
 # This just simulates some data and stuff. Assuming that you have data already
 # in your application, no need to read this file.
 include("example_setup.jl")
@@ -15,5 +17,6 @@ const cfg = Vecchia.kdtreeconfig(sim, # your simulated data, a Matrix{Float64}.
 # Now just compute the estimator and let autodiff and Ipopt take care of the rest!
 # Note that you can provide kwargs here for the optimizer. But if you're
 # providing your own optimizer you're probably customizing more than that anyway.
-const estimator = vecchia_estimate(cfg, init[1:3], warn_box=false) 
+solver    = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-3, "sb"=>"yes")
+estimator = Vecchia.vecchia_estimate(cfg, init[1:3], solver) 
 

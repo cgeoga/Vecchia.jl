@@ -144,42 +144,6 @@ function generic_nll(R::UniformScaling, data)
   (m*n*log(eta2) + sum(_square, data)/eta2)/2
 end
 
-function vecchia_estimate(cfg, init; box_lower=fill(1e-5, length(init)), 
-                          warn_box=true, optimizer=sqptr_optimize, 
-                          optimizer_kwargs...)
-  likelihood = WrappedLogLikelihood(cfg)
-  if warn_box && all(==(1e-5), box_lower)
-    notify_disable("warn_box=false")
-    @warn BOUNDS_WARN maxlog=1
-  end
-  optimizer(likelihood, init; box_lower=box_lower,  optimizer_kwargs...)
-end
-
-function exact_estimate(cfg, init; errormodel=nothing, 
-                        optimizer=sqptr_optimize, 
-                        box_lower=fill(1e-5, length(init)), 
-                        warn_box=true, optimizer_kwargs...)
-  if warn_box
-    notify_disable("warn_box=false")
-    @warn BOUNDS_WARN maxlog=1
-  end
-  pts  = reduce(vcat, cfg.pts)
-  dat  = reduce(vcat, cfg.data)
-  n    = length(pts)
-  vdat = vec(dat)
-  kernel = isnothing(errormodel) ? cfg.kernel : ErrorKernel(cfg.kernel, ScaledIdentity(n))
-  obj  = p -> GPMaxlik.gnll_forwarddiff(p, pts, vdat, kernel)
-  optimizer(obj, init; box_lower=box_lower, optimizer_kwargs...)
-end
-
-function vecchia_estimate_nugget(cfg, init, optimizer, errormodel; 
-                                 optimizer_kwargs...)
-  nugkernel = ErrorKernel(cfg.kernel, errormodel) 
-  nug_cfg   = Vecchia.VecchiaConfig(nugkernel, cfg.data, cfg.pts, cfg.condix)
-  likelihood = WrappedLogLikelihood(nug_cfg)
-  optimizer(likelihood, init; optimizer_kwargs...)
-end
-
 function chunk_indices(vv)
   szs    = [size(vj, 1) for vj in vv]
   starts = vcat(1, cumsum(szs).+1)[1:(end-1)]
@@ -234,25 +198,6 @@ end
 function allocate_crchol_bufs(n::Int64, ::Val{D}, ::Val{Z}, 
                               cpts_sz, pts_sz) where{D,Z}
   [crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz) for _ in 1:n]
-end
-
-function pretty_print_number(x)
-  if x < zero(x)
-    @printf "-%06.3f " abs(x)
-  else
-    @printf " %06.3f " x
-  end
-  nothing
-end
-
-# A simple stand-in that pretty-prints a vector. I'm sure there is a smarter way
-# to do this.
-function pretty_print_vec(x, newline=false)
-  print("x: [")
-  pretty_print_number.(x)
-  print("]")
-  newline && println()
-  nothing
 end
 
 function alloc_tiles(pts, condix, ::Val{H}) where{H}

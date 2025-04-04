@@ -10,7 +10,8 @@ BLAS.set_num_threads(1)
 function exact_nll(cfg, p)
   pts = reduce(vcat, cfg.pts)
   dat = reduce(vcat, cfg.data)
-  Vecchia.GPMaxlik.gnll_forwarddiff(p, pts, dat, cfg.kernel)
+  S   = [cfg.kernel(x, y, p) for x in pts, y in pts]
+  Vecchia.generic_dense_nll(S, dat)
 end
 
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])

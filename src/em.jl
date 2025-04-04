@@ -48,7 +48,7 @@ function prepare_z0_SR0(cfg, arg, data, errormodel)
   (SRf\(Rinv*data), SRf)
 end
 
-function em_step(cfg, arg, saa, errormodel, optimizer; optimizer_kwargs...)
+function em_step(cfg, arg, saa, errormodel, solver)
   checkthreads() 
   # check that the variance parameter isn't zero:
   @assert error_isinvertible(errormodel, arg) EM_NONUG_WARN
@@ -60,7 +60,7 @@ function em_step(cfg, arg, saa, errormodel, optimizer; optimizer_kwargs...)
   # Note that I need to compute two traces that look like tr( [U * U^T] *
   # [(PtL)*(PtL^T)]^{-1}). Re-arranging those things, that means I am computing
   # tr(M*M^T), where M=U'*(PtL)^{-T}. So that's what the pre-solve is here.
-  divisor = sqrt(size(saa,2))
+  divisor = sqrt(size(saa, 2))
   pre_sf_solved_saa = (SR0f.PtL'\saa)./divisor 
   pre_sf_solved_saa_sumsq = sum(_square, pre_sf_solved_saa)
   # Now, unlike the v1 version, create a NEW configuration where the "data"
@@ -72,6 +72,6 @@ function em_step(cfg, arg, saa, errormodel, optimizer; optimizer_kwargs...)
   dat_minus_z0 = dat-z0
   ejnll = ExpectedJointNll(tmp_cfg, errormodel, dat_minus_z0, 
                            pre_sf_solved_saa, pre_sf_solved_saa_sumsq)
-  optimizer(ejnll, arg; optimizer_kwargs...)
+  optimize(ejnll, arg, solver)
 end
 

@@ -8,72 +8,13 @@ struct ErrorKernel{K,E} <: Function
   error::E
 end
 
+function optimize end
+function vecchia_estimate end
+function vecchia_estimate_nugget end
+
 function (k::ErrorKernel{K})(x, y, p) where{K}
   k.kernel(x,y,p)+k.error(x,y,p)
 end
-
-struct WrappedLogLikelihood{C} <: Function
-  cfg::C
-end
-(w::WrappedLogLikelihood{C})(p) where{C} = Vecchia.nll(w.cfg, p)
-
-struct AutoFwdfgh{F,R}
-  f::F 
-  res::R
-end
-
-function AutoFwdfgh(f, n::Int64)
-  res = DiffResults.HessianResult(zeros(n))
-  AutoFwdfgh(f, res)
-end
-
-function (f::AutoFwdfgh{F,R})(x) where{F,R}
-  ForwardDiff.hessian!(f.res, f.f, x)
-  (DiffResults.value(f.res), DiffResults.gradient(f.res), 
-   Hermitian(DiffResults.hessian(f.res)))
-end
-
-struct AutoFwdBFGS{F,R}
-  f::F 
-  res::R
-  xm1::Vector{Float64}
-  gm1::Vector{Float64}
-  g::Vector{Float64}
-  Bm1::Matrix{Float64}
-  B::Matrix{Float64}
-end
-
-function AutoFwdBFGS(f, n::Int64)
-  AutoFwdBFGS(f, DiffResults.GradientResult(zeros(n)), zeros(n), zeros(n), 
-              zeros(n), zeros(n,n), Matrix{Float64}(I(n)))
-end
-
-function (f::AutoFwdBFGS{F,R})(x) where{F,R}
-  # Move the "current" gradient and Hessian approx to the old spots:
-  f.gm1 .= f.g
-  f.Bm1 .= f.B
-  # get the new gradient, and put it in place:
-  ForwardDiff.gradient!(f.res, f.f, x)
-  f.g .= DiffResults.gradient(f.res)
-  # now compute the new updated Hessian:
-  yk = f.g - f.gm1
-  sk = x   - f.xm1
-  bs = f.Bm1*sk
-  # TODO (cg 2022/12/23 11:26): should re-write this thoughtful to use mul!, etc.
-  f.B .= f.Bm1 + (yk*yk')./dot(yk, sk) - (bs*bs')./dot(sk, f.Bm1, sk)
-  # update the xm1:
-  f.xm1 .= x
-  # return everything:
-  (DiffResults.value(f.res), f.g, Hermitian(f.B))
-end
-
-# Writing a local quadratic approximation struct to avoid creating a closure.
-struct LocalQuadraticApprox
-  fk::Float64
-  gk::Vector{Float64}
-  hk::Hermitian{Float64, Matrix{Float64}}
-end
-(m::LocalQuadraticApprox)(p) = m.fk + dot(m.gk, p) + dot(p, m.hk, p)/2
 
 struct CovarianceTiles{T}
   store::Dict{Tuple{Int64, Int64}, Matrix{T}}

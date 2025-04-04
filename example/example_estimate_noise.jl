@@ -1,7 +1,9 @@
 
+using JuMP, Ipopt
+
 # Unlike in example_estimate.jl, the data here has also been polluted with
 # additive noise, which sort of ruins the screening effect. So we recently wrote
-# a paper (Geoga & Stein 2022 ArXiv, see the README for a URL) that uses the EM
+# a paper (Geoga & Stein 2023 JCGS, see the README for a URL) that uses the EM
 # algorithm. Here's how to use that methodology.
 
 # as before, this is just setup:
@@ -20,16 +22,12 @@ const cfg = Vecchia.kdtreeconfig(sim_nug, # your simulated data, a Matrix{Float6
 # Now let's try to estimate that, where note that the parameters now use an
 # extra value that gives the VARIANCE of the measurement noise.
 #
-# This call also demonstrates the ways to provide extra kwargs to your optimizer
-# function. "box_lower" means what you expect, giving lower box bounds for each
-# of the variables.
-#
-const opt_kw = (:box_lower=>[0.01, 0.01, 0.25, 0.0], :verbose=>false)
-const em_res = em_estimate(cfg, saa, init, optimizer_kwargs=opt_kw, 
-                           errormodel=Vecchia.ScaledIdentity(length(pts)),
-                           warn_optimizer=false, warn_notation=false)
+ipopt  = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-3, "sb"=>"yes", "print_level"=>0)
+em_res = em_estimate(cfg, saa, init, solver=ipopt, box_lower=[1e-8, 1e-8, 0.25, 0.0],
+                     errormodel=Vecchia.ScaledIdentity(length(pts)),
+                     warn_notation=false)
 
 # Your estimator is now given as the last item in your EM path:
-const em_path = em_res[3]
-const em_mle  = em_path[end]
+path    = em_res.path
+em_mle  = path[end]
 
