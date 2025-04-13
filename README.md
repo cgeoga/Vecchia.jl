@@ -56,7 +56,7 @@ For estimation, thanks to Julia's cool weakdep/extension framework, you have a
 few options. The first is to use [JuMP](https://github.com/jump-dev/JuMP.jl).
 Here is a demonstration of fitting your model with JuMP and
 [Ipopt](https://github.com/jump-dev/Ipopt.jl):
-```
+```julia
 using JuMP  # necessary to load the extension!
 using Ipopt # or any other solver 
 
@@ -75,7 +75,7 @@ which offers a libre trust-region based solver `trb`. Ipopt is a fantastic
 general-purpose solver, but at least sometimes the trust region methods can work
 a _lot_ better than the line search ones (like Ipopt). So you may also consider
 fitting with
-```
+```julia
 using GALAHAD, Accessors, ForwardDiff # necessary to load the extension!
 
 solver = Vecchia.TRBSolver(;verbose=true)
