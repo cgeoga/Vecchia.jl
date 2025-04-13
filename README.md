@@ -23,8 +23,9 @@ some covariance functions screening really doesn't hold and so this
 approximation scheme may not perform well. This isn't something that the code
 can enforce, so user discretion is required.
 
-Here is a very quick demo:
-
+Here is a very quick demo. The only real step here is to create a
+`VecchiaConfig` object, which specifies the point ordering/leaves/conditioning
+sets/and so on. One convenience constructor for doing that is shown here:
 ```julia
 using LinearAlgebra, StaticArrays, Vecchia
 
@@ -44,16 +45,44 @@ dat = randn(length(pts))
 chunksize = 10 
 num_conditioning_chunks = 3
 const cfg = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
+```
+But note that you can directly construct the `VecchiaConfig` yourself pretty
+easily. If you have a specific type of configuration you would like to achieve,
+please feel free to open an issue and we can talk about how that is done, or
+submit a PR. I would be very happy to merge in a few other generic constructors
+here, because this chunked KD-tree one is not always the best choice.
 
-# Estimate like so, with the default optimizer being Ipopt and using autodiff
-# for all gradients and Hessians. TRUE Hessians are used in this estimation by
-# default, not expected Fisher matrices.
-using JuMP, Ipopt
+For estimation, thanks to Julia's cool weakdep/extension framework, you have a
+few options. The first is to use [JuMP](https://github.com/jump-dev/JuMP.jl).
+Here is a demonstration of fitting your model with JuMP and
+[Ipopt](https://github.com/jump-dev/Ipopt.jl):
+```
+using JuMP  # necessary to load the extension!
+using Ipopt # or any other solver 
+
 solver = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-4)
 mle    = vecchia_estimate(cfg, some_init, solver)
 ```
+Note that JuMP has bindings to many different optimizers, and this extension
+only requires loading JuMP. Ipopt is, in my experience and option, among the
+best and most battle-tested libre optimizers available. It is a great default
+choice. If you have it, [KNITRO.jl](https://github.com/jump-dev/KNITRO.jl) is
+another good choice to consider here---but it is not libre, and it is certainly
+not gratis.
 
-**See the example files for a heavily commented demonstration.**
+The second option is to use [GALAHAD.jl](https://github.com/ralna/GALAHAD),
+which offers a libre trust-region based solver `trb`. Ipopt is a fantastic
+general-purpose solver, but at least sometimes the trust region methods can work
+a _lot_ better than the line search ones (like Ipopt). So you may also consider
+fitting with
+```
+using GALAHAD, Accessors, ForwardDiff # necessary to load the extension!
+
+solver = Vecchia.TRBSolver(;verbose=true)
+mle    = vecchia_estimate(cfg, some_init, solver)
+```
+
+**See the example files for heavily commented demonstrations.**
 
 The code is organized with modularity and user-specific applications in mind, so
 the primary way to interact with the approximation is to create a
