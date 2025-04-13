@@ -1,5 +1,5 @@
 
-using JuMP, Ipopt
+using GALAHAD, Accessors, ForwardDiff
 
 # Unlike in example_estimate.jl, the data here has also been polluted with
 # additive noise, which sort of ruins the screening effect. So we recently wrote
@@ -22,10 +22,12 @@ const cfg = Vecchia.kdtreeconfig(sim_nug, # your simulated data, a Matrix{Float6
 # Now let's try to estimate that, where note that the parameters now use an
 # extra value that gives the VARIANCE of the measurement noise.
 #
-ipopt  = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-3, "sb"=>"yes", "print_level"=>0)
-em_res = em_estimate(cfg, saa, init, solver=ipopt, box_lower=[1e-8, 1e-8, 0.25, 0.0],
+solver = Vecchia.TRBSolver(verbose=false)
+em_res = em_estimate(cfg, saa, init, solver=solver, 
+                     box_lower=[1e-8, 1e-8, 0.25, 0.0],
+                     box_upper=[10.0, 10.0, 5.00, 5.0],
                      errormodel=Vecchia.ScaledIdentity(length(pts)),
-                     warn_notation=false)
+                     max_em_iter=10, warn_notation=false)
 
 # Your estimator is now given as the last item in your EM path:
 path    = em_res.path

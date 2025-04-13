@@ -48,7 +48,7 @@ function prepare_z0_SR0(cfg, arg, data, errormodel)
   (SRf\(Rinv*data), SRf)
 end
 
-function em_step(cfg, arg, saa, errormodel, solver)
+function em_step(cfg, arg, saa, errormodel, solver, box_lower, box_upper)
   checkthreads() 
   # check that the variance parameter isn't zero:
   @assert error_isinvertible(errormodel, arg) EM_NONUG_WARN
@@ -72,6 +72,6 @@ function em_step(cfg, arg, saa, errormodel, solver)
   dat_minus_z0 = dat-z0
   ejnll = ExpectedJointNll(tmp_cfg, errormodel, dat_minus_z0, 
                            pre_sf_solved_saa, pre_sf_solved_saa_sumsq)
-  optimize(ejnll, arg, solver)
+  optimize(ejnll, arg, solver; box_lower=box_lower, box_upper=box_upper)
 end
 

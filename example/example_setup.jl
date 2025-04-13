@@ -26,7 +26,7 @@ if !(@isdefined sim)
   const tru  = [5.0, 0.05, 2.25, 0.25]
   const pts  = [SVector{2,Float64}(rand(rng, 2)...) for _ in 1:5_000]
   const saa  = rand(rng, (-1.0, 1.0), length(pts), 72)
-  const init = [2.5, 0.1, 1.0, 0.5]
+  const init = [2.5, 0.1, 1.1, 0.5]
   const (sim, sim_nug) = matern_simulate(pts, tru, rng)
 end
 

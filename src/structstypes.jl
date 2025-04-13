@@ -8,9 +8,22 @@ struct ErrorKernel{K,E} <: Function
   error::E
 end
 
+struct TRBSolver
+  print_level::Int64
+end
+TRBSolver(;verbose::Bool=true) = TRBSolver(verbose ? 1 : 0)
+
 function optimize end
-function vecchia_estimate end
-function vecchia_estimate_nugget end
+
+function vecchia_estimate(cfg, init, solver; kwargs...)
+  optimize(cfg, init, solver; kwargs...)
+end
+
+function vecchia_estimate_nugget(cfg, init, solver, errormodel; kwargs...)
+  nugkernel = Vecchia.ErrorKernel(cfg.kernel, errormodel)
+  nugcfg    = Vecchia.VecchiaConfig(nugkernel, cfg.data, cfg.pts, cfg.condix)
+  vecchia_estimate(nugcfg, init, solver; kwargs...)
+end
 
 function (k::ErrorKernel{K})(x, y, p) where{K}
   k.kernel(x,y,p)+k.error(x,y,p)

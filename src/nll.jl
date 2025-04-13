@@ -26,6 +26,8 @@ function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   (logdets*ndata + qforms)/2
 end
 
+(V::VecchiaConfig{H,D,F})(p) where{H,D,F} = nll(V, p)
+
 function _nll(pieces::Vector{VecchiaLikelihoodPiece{H,D,F,T}}, 
               params) where{H,D,F,T}
   logdets = zeros(eltype(params), length(pieces))
