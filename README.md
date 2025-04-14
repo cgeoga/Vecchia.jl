@@ -37,7 +37,7 @@ kfn(x,y,p) = p[1]*exp(-norm(x-y)/p[2])*(1.0+norm(x-y)/p[2])
 
 # Locations for fake measurements, in this case 2048 of them, and fake data 
 # (data NOT from the correction distribution, this is just a maximally simple demo):
-pts = [SVector{2, Float64}(randn(2)) for _ in 1:2048]
+pts = rand(SVector{2, Float64}, 2048)
 dat = randn(length(pts))
 
 # Create the VecchiaConfig: 

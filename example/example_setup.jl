@@ -22,11 +22,15 @@ end
 
 # Define some const values for the simulation:
 if !(@isdefined sim)
-  const rng  = StableRNG(123)
-  const tru  = [5.0, 0.05, 2.25, 0.25]
-  const pts  = [SVector{2,Float64}(rand(rng, 2)...) for _ in 1:5_000]
-  const saa  = rand(rng, (-1.0, 1.0), length(pts), 72)
-  const init = [2.5, 0.1, 1.1, 0.5]
-  const (sim, sim_nug) = matern_simulate(pts, tru, rng)
+  const rng      = StableRNG(1234)
+  const tru      = [5.0, 0.1, 2.25, 0.25]
+  const pts      = rand(rng, SVector{2,Float64}, 5_000)
+  const pts_hold = rand(rng, SVector{2,Float64}, 50)
+  const saa      = rand(rng, (-1.0, 1.0), length(pts), 72)
+  const init     = [2.5, 0.1, 1.1, 0.5]
+  const (joint_sim, joint_sim_nug) = matern_simulate(vcat(pts, pts_hold), tru, rng)
+  const sim     = joint_sim[1:length(pts)]
+  const sim_nug = joint_sim_nug[1:length(pts)]
+  const holdout_truth = joint_sim[(length(pts)+1):end]
 end
 

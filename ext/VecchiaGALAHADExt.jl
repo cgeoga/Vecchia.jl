@@ -58,6 +58,10 @@ module VecchiaGALAHADExt
 
     prec = (x, u, v, _) -> (u .= v; return 0) # dummy preconditioner (?)
 
+    @reset control[].trs_control.symmetric_linear_solver = galahad_linear_solver("sytr")
+    @reset control[].trs_control.definite_linear_solver  = galahad_linear_solver("potr")
+    @reset control[].psls_control.definite_linear_solver = galahad_linear_solver("potr")
+
     @reset control[].print_level       = solver.print_level
     @reset control[].model             = 2
     @reset control[].subproblem_direct = true

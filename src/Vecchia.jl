@@ -3,7 +3,7 @@ module Vecchia
 
   using Printf, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays
 
-  export nll, vecchia_estimate, vecchia_estimate_nugget, em_estimate
+  export nll, vecchia_estimate, vecchia_estimate_nugget, em_estimate, knnpredict
 
   include("warnings.jl")
 

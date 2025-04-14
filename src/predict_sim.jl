@@ -1,4 +1,36 @@
 
+# TODO (cg 2025/04/14 10:21): Would be very easy to make this parallel. 
+function knnpredict(pts::Vector{SVector{D,Float64}}, data::Matrix{Float64}, kernel::K, 
+                    params, pred_pts::Vector{SVector{D,Float64}}, ncondition) where{D,K}
+  tree  = KDTree(pts)
+  idxs  = knn(tree, pred_pts, ncondition)[1]
+  pts_buf      = Vector{SVector{2,Float64}}(undef, ncondition)
+  marginal_buf = zeros(ncondition, ncondition)
+  cross_buf    = zeros(ncondition)
+  out          = zeros(length(pred_pts), size(data, 2))
+  for j in eachindex(pred_pts)
+    cpts = view(pts, idxs[j])
+    for k in 1:ncondition
+      cross_buf[k] = kernel(cpts[k], pred_pts[j], params)
+    end
+    updatebuf!(marginal_buf, cpts, cpts, kernel, params, skipltri=true)
+    marginal_cov_f = cholesky!(Symmetric(marginal_buf))
+    ldiv!(marginal_cov_f, cross_buf)
+    for k in 1:size(data, 2)
+      out[j,k] = dot(cross_buf, view(data, idxs[j], k))
+    end
+  end
+  out
+end
+
+function knnpredict(vc::VecchiaConfig{H,D,F}, params,
+                    pred_pts::Vector{SVector{D,Float64}};
+                    ncondition=maximum(length, vc.condix)) where{H,D,F}
+  vpts  = reduce(vcat, vc.pts)
+  vdata = reduce(vcat, vc.data)
+  knnpredict(vpts, vdata, vc.kernel, params, pred_pts, ncondition)
+end
+
 function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
                          pred_pts::Vector{SVector{D,Float64}};
                          ncondition=maximum(length, vc.condix)) where{H,D,F}
