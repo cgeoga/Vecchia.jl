@@ -229,12 +229,6 @@ choice.
 # Wanted/planned changes (contributions welcome!)
 
 - More docstrings!
-- Move several deps to weakdeps. Really, this package should only have
-  non-stdlib deps of `StaticArrays` and `NearestNeighbors` (or some other kNN
-  package, see below). All the other deps have to do with estimation, but with
-  the extension system those could be moved out of the `[deps]` and the package
-  could be made a lot leaner. This is purely an issue of finding the
-  time---basically no engineering is required here.
 - Changing from `NearestNeighbors.KDTree` to a dynamic object for kNN queries.
   As of now, for configurations that pick conditioning points based on nearest
   neighbors, an entirely new static tree is constructed in each iteration when a
