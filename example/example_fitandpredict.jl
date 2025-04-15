@@ -5,14 +5,8 @@ using GALAHAD, Accessors, ForwardDiff
 # in your application, no need to read this file.
 include("example_setup.jl")
 
-# Create the VecchiaConfig, which specifies the prediction and conditioning
-# sets. This package just uses a generic K-d tree for this, but there are other
-# options that might work meaningfully better in at least some edge cases. 
-const cfg = Vecchia.kdtreeconfig(sim, # your simulated data, a Matrix{Float64}.
-                                 pts, # locations, a Vector{SVector{D,Float64}}.
-                                 3,   # size of each leaf/prediction set.
-                                 5,   # number of past leaves to condition on.
-                                 matern) 
+# A perfectly fine default configuration.
+const cfg = knnconfig(sim, pts, 10, matern)
 
 # Now just compute the estimator and let autodiff and Ipopt take care of the rest!
 # Note that you can provide kwargs here for the optimizer. But if you're
