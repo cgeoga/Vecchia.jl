@@ -192,14 +192,17 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   VecchiaConfig{H,D,F}(kfun, dat_out, pts_out, condix)
 end
 
-function nosortknnconfig(data, pts, blockranks, kfun)
-  @warn "This function (nosortknnconfig) is for debugging and experimentation only---it is painfully slow and careless." maxlog=1
-  condix = Vector{Vector{Int64}}()
-  push!(condix, Int64[])
+function knnconfig(data, pts, blockranks, kfun; randomize=true)
+  if randomize
+    p = Random.randperm(length(pts))
+    return knnconfig(data[p,:], pts[p], blockranks[p], kfun; randomize=false)
+  end
+  condix = [Int64[]]
+  tree   = AdaptiveKDTrees.KNN.KDTree(Matrix{Float64}(undef, (length(pts[1]), 0)))
   for j in 2:length(pts)
-    ptj = pts[j]
-    tree_j = NearestNeighbors.KDTree(pts[1:(j-1)])
-    idxs   = NearestNeighbors.knn(tree_j, ptj, min(j-1,blockranks[j]))[1]
+    AdaptiveKDTrees.KNN.add_point!(tree, pts[j-1])
+    ptj  = pts[j]
+    idxs = AdaptiveKDTrees.KNN.knn(tree, ptj, min(j-1,blockranks[j]))[1]
     push!(condix, sort(idxs))
   end
   pts = [[x] for x in pts]
@@ -207,7 +210,7 @@ function nosortknnconfig(data, pts, blockranks, kfun)
   VecchiaConfig(kfun, dat, pts, condix)
 end
 
-function nosortknnconfig(data, pts, blockrank::Int64, kfun)
-  nosortknnconfig(data, pts, fill(blockrank, length(pts)), kfun)
+function knnconfig(data, pts, blockrank::Int64, kfun; randomize=true)
+  knnconfig(data, pts, fill(blockrank, length(pts)), kfun; randomize=randomize)
 end
 

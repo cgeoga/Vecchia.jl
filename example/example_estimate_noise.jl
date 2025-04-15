@@ -1,7 +1,7 @@
 
 using GALAHAD, Accessors, ForwardDiff
 
-# Unlike in example_estimate.jl, the data here has also been polluted with
+# Unlike in example_estimate_*.jl, the data here has also been polluted with
 # additive noise, which sort of ruins the screening effect. So we recently wrote
 # a paper (Geoga & Stein 2023 JCGS, see the README for a URL) that uses the EM
 # algorithm. Here's how to use that methodology.
@@ -9,15 +9,13 @@ using GALAHAD, Accessors, ForwardDiff
 # as before, this is just setup:
 include("example_setup.jl")
 
-# Just as before, let's make a config object.
+# Create the VecchiaConfig, which specifies the prediction and conditioning
+# sets. This knn- and random ordering-based configuration is a generic choice
+# that works well in many settings.
 #
 # IMPORTANT: note that the kernel function you provide here DOES NOT add the
 # nugget/measurement error variance!
-const cfg = Vecchia.kdtreeconfig(sim_nug, # your simulated data, a Matrix{Float64}.
-                                 pts,     # locations, a Vector{SVector{D,Float64}}.
-                                 1,       # size of each leaf/prediction set.
-                                 5,       # number of past leaves to condition on.
-                                 matern) 
+const cfg = Vecchia.knnconfig(sim, pts, 10, matern)
 
 # Now let's try to estimate that, where note that the parameters now use an
 # extra value that gives the VARIANCE of the measurement noise.

@@ -6,13 +6,9 @@ using JuMP, Ipopt
 include("example_setup.jl")
 
 # Create the VecchiaConfig, which specifies the prediction and conditioning
-# sets. This package just uses a generic K-d tree for this, but there are other
-# options that might work meaningfully better in at least some edge cases. 
-const cfg = Vecchia.kdtreeconfig(sim, # your simulated data, a Matrix{Float64}.
-                                 pts, # locations, a Vector{SVector{D,Float64}}.
-                                 5,   # size of each leaf/prediction set.
-                                 3,   # number of past leaves to condition on.
-                                 matern) 
+# sets. This knn- and random ordering-based configuration is a generic choice
+# that works well in many settings.
+const cfg = Vecchia.knnconfig(sim, pts, 10, matern)
 
 # Now just compute the estimator and let autodiff and Ipopt take care of the rest!
 # Note that you can provide kwargs here for the optimizer. But if you're

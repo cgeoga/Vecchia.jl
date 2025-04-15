@@ -129,6 +129,12 @@ function _nnz(vchunks, condix)
   out
 end
 
+function generic_dense_simulate(pts, kernel, params)
+  S  = [kernel(x, y, params) for x in pts, y in pts]
+  Sf = cholesky!(S)
+  Sf.L*randn(length(pts))
+end
+
 function generic_dense_nll(S, data)
   Sf = cholesky(Hermitian(S))
   (logdet(Sf) + sum(abs2, Sf.U'\data))/2

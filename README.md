@@ -38,13 +38,18 @@ kfn(x,y,p) = p[1]*exp(-norm(x-y)/p[2])*(1.0+norm(x-y)/p[2])
 # Locations for fake measurements, in this case 2048 of them, and fake data 
 # (data NOT from the correction distribution, this is just a maximally simple demo):
 pts = rand(SVector{2, Float64}, 2048)
-dat = randn(length(pts))
+dat = Vecchia.generic_dense_simulate(pts, kfn, (1.0, 0.1, 0.75))
 
-# Create the VecchiaConfig: 
+# Built-in configuration option 1: random ordering and knn-based conditioning sets.
+# If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
+const cfg = knnconfig(dat, pts, 10, kfn)
+
+# Built-in configuration option 2: a KD-tree based configuration on chunks
+# (as opposed to singletons), as in Stein/Chi/Welty JRSSB 2004.
 # If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
 chunksize = 10 
 num_conditioning_chunks = 3
-const cfg = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
+const cfg_chunk = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
 ```
 But note that you can directly construct the `VecchiaConfig` yourself pretty
 easily. If you have a specific type of configuration you would like to achieve,
@@ -229,15 +234,11 @@ choice.
 # Wanted/planned changes (contributions welcome!)
 
 - More docstrings!
-- Changing from `NearestNeighbors.KDTree` to a dynamic object for kNN queries.
-  As of now, for configurations that pick conditioning points based on nearest
-  neighbors, an entirely new static tree is constructed in each iteration when a
-  new point gets added. This isn't actually as slow as you would think because
-  `NearestNeighbors` is so darn fast, but obviously this can and should be
-  approved. The ideal alternative is some data structure that takes
-  `SVector{D,Float64}`s and rebalances to keep a O(k log n) worst-case query. A
-  real dream would be for the query to also be non-allocating to open the door for
-  parallelization, but even a fast dynamic tree object would be a big improvement.
+- It might be nice to add a new `ScalarVecchiaConfig` or something similar for
+  cases where the prediction sets are singletons. The `VecchiaConfig` object has
+  a bit of extra indirection that is necessary for chunked prediction sets.
+  But maybe with a little reworking something simpler could be given in the
+  scalar case.
 - Conditional simulations were recently added, but that implementation would
   hugely benefit from somebody kicking the tires and playing with details and
   smart defaults/guardrails.
