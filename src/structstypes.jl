@@ -36,6 +36,7 @@ end
 function Base.getindex(tiles::CovarianceTiles{T}, j::Int64, k::Int64) where{T}
   store = tiles.store
   haskey(store, (j,k)) && return store[(j,k)]
+  haskey(store, (k,j)) && return store[(k,j)]'
   throw(error("No tile available for pair ($j, $k)."))
 end
 

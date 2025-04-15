@@ -55,18 +55,16 @@ function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
 end
 
 function updatebuf_tiles!(buf, tiles, jv, kv)
-  (start_i1, start_i2, s1, s2) = (1, 1, 0, 0)
+  (ix1, ix2, s1) = (1, 1, 0)
   for j in jv
-    start_i2 = 1
+    ix2 = 1
     for k in kv
-      tilejk   = (j <= k) ? tiles[k,j] : tiles[j,k] # only make transpose on assign
+      tilejk   = tiles[j, k]
       (s1, s2) = size(tilejk)
-      (stop_i1, stop_i2) = (start_i1+s1-1, start_i2+s2-1)
-      bufview  = view(buf, start_i1:stop_i1, start_i2:stop_i2)
-      (j <= k) ? (bufview .= tilejk') : (bufview .= tilejk) 
-      start_i2 += s2
+      view(buf, ix1:(ix1+s1-1), ix2:(ix2+s2-1)) .= tilejk
+      ix2 += s2
     end
-    start_i1 += s1
+    ix1 += s1
   end
   nothing
 end
@@ -201,17 +199,19 @@ function allocate_crchol_bufs(n::Int64, ::Val{D}, ::Val{Z},
 end
 
 function alloc_tiles(pts, condix, ::Val{H}) where{H}
-  # first, we need to create all relevant pairs of indices that need allocation.
-  # This code isn't fast or smart, but it will never be the bottleneck, so whatever.
-  req_pairs = mapreduce(vcat, enumerate(condix)) do (j,ix)
-    isempty(ix) && return [(j,j)]
-    vcat((j,j), [(j, ixj) for ixj in ix])
+  req_pairs = Set{Tuple{Int64, Int64}}()
+  sizehint!(req_pairs, 2*length(condix)*maximum(length, condix))
+  for j in eachindex(condix)
+      push!(req_pairs, (j, j))
+    cj = condix[j]
+    for (ixk, k) in enumerate(cj)
+      push!(req_pairs, (j, k))
+      for l in 1:ixk
+        push!(req_pairs, (k, cj[l]))
+      end
+    end
   end
-  # filter (j,k) to only keep pairs where j <= k, since by symmetry we only need one:
-  filter!(jk -> jk[1] >= jk[2], req_pairs)
-  # now remove duplicates:
-  unique!(req_pairs)
-  # now pre-allocate buffers for each tile:
+  req_pairs = collect(req_pairs)
   bufs = map(req_pairs) do jk
     (ptj, ptk) = (pts[jk[1]], pts[jk[2]])
     (lj, lk)   = (length(ptj), length(ptk))
