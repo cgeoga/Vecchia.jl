@@ -214,3 +214,33 @@ function knnconfig(data, pts, blockrank::Int64, kfun; randomize=true)
   knnconfig(data, pts, fill(blockrank, length(pts)), kfun; randomize=randomize)
 end
 
+# An internal function that takes an existing configuration and _new_ locations
+# and values representing landmark/inducing points and returns a new config that
+# keeps all the original conditioning points from the input config, but also
+# adds thse fsa points as a chunked conditioning point to all of them.
+function _fsa_config(_cfg, fsa_pts, fsa_data)
+  cfg = deepcopy(_cfg)
+  pushfirst!(cfg.pts,  fsa_pts)
+  pushfirst!(cfg.data, hcat(fsa_data))
+  for j in eachindex(cfg.condix)
+    cj = cfg.condix[j]
+    !isempty(cj) && (cj .+= 1)
+    pushfirst!(cj, 1)
+  end
+  pushfirst!(cfg.condix, Int64[])
+  cfg
+end
+
+function fsa_knnconfig(pts, data, kernel, mfsa, mknn)
+  tree    = KDTree(pts)
+  fsa_ix  = 1:div(length(pts), mfsa):length(pts)
+  fsa_pts = pts[fsa_ix]
+  fsa_dat = data[fsa_ix]
+  res_pts = copy(pts)
+  res_dat = copy(data)
+  deleteat!(res_pts, fsa_ix)
+  deleteat!(res_dat, fsa_ix)
+  res_cfg = knnconfig(res_dat, res_pts, mknn, kernel; randomize=true)
+  _fsa_config(res_cfg, fsa_pts, fsa_dat)
+end
+
