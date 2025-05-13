@@ -1,9 +1,9 @@
 
 module Vecchia
 
-  using Printf, Random, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays, AdaptiveKDTrees
+  using Printf, Random, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays, HNSW
 
-  export nll, vecchia_estimate, vecchia_estimate_nugget, em_estimate, knnpredict, knnconfig
+  export nll, vecchia_estimate, vecchia_estimate_nugget, em_estimate, knnpredict, knnconfig, rchol
 
   include("warnings.jl")
 

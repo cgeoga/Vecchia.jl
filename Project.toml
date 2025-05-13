@@ -4,7 +4,7 @@ authors = ["Chris Geoga <christopher.geoga@rutgers.edu>"]
 version = "0.10.2"
 
 [deps]
-AdaptiveKDTrees = "68d1b5e8-2215-47d8-a76e-d1727e222b22"
+HNSW = "540f64fa-c57e-11e8-081c-41422cda4629"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -20,10 +20,10 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 
 [extensions]
 VecchiaGALAHADExt = ["GALAHAD", "Accessors", "ForwardDiff"]
-VecchiaJuMPExt = "JuMP"
+VecchiaJuMPExt = ["JuMP", "ForwardDiff"]
 
 [compat]
-AdaptiveKDTrees = "0.1.0"
+HNSW = "0.1.5"
 NearestNeighbors = "0.4"
 Random = "1.11.0"
 StaticArrays = "1"

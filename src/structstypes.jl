@@ -192,26 +192,47 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   VecchiaConfig{H,D,F}(kfun, dat_out, pts_out, condix)
 end
 
-function knnconfig(data, pts, blockranks, kfun; randomize=true)
+function knnconfig(data, pts, blockranks, kfun; randomize=false)
   if randomize
     p = Random.randperm(length(pts))
     return knnconfig(data[p,:], pts[p], blockranks[p], kfun; randomize=false)
   end
   condix = [Int64[]]
-  tree   = AdaptiveKDTrees.KNN.KDTree(Matrix{Float64}(undef, (length(pts[1]), 0)))
+  tree   = HierarchicalNSW(pts)
   for j in 2:length(pts)
-    AdaptiveKDTrees.KNN.add_point!(tree, pts[j-1])
+    add_to_graph!(tree, [j-1])
     ptj  = pts[j]
-    idxs = AdaptiveKDTrees.KNN.knn(tree, ptj, min(j-1,blockranks[j]))[1]
+    idxs = Int64.(knn_search(tree, pts[j], min(j-1, blockranks[j]))[1])
     push!(condix, sort(idxs))
   end
   pts = [[x] for x in pts]
-  dat = map(x->Matrix(x'), eachrow(data))
+  dat = hcat.(eachrow(data)) 
   VecchiaConfig(kfun, dat, pts, condix)
 end
 
-function knnconfig(data, pts, blockrank::Int64, kfun; randomize=true)
-  knnconfig(data, pts, fill(blockrank, length(pts)), kfun; randomize=randomize)
+function knnconfig(data, pts, m::Int64, kfun; randomize=false)
+  knnconfig(data, pts, fill(m, length(pts)), kfun; randomize=randomize)
+end
+
+function knnconfig(data, pts::Vector{SVector{1,Float64}}, mv::AbstractVector{Int64}, kfun; 
+                   randomize=false)
+  randomize && @info "randomize=true flag ignored since in 1D a natural ordering is possible."
+  _pts  = getindex.(pts, 1)
+  sp    = sortperm(_pts)
+  _pts  = _pts[sp]
+  _data = data[sp,:]
+  cix   = [collect(max(1, j-mv[j]):(j-1)) for j in 1:length(pts)]
+  VecchiaConfig(kfun, hcat.(eachrow(_data)), [[SA[x]] for x in _pts], cix)
+end
+
+function knnconfig(data, pts::Vector{SVector{1,Float64}}, m::Int, kfun; 
+                   randomize=false)
+  knnconfig(data, pts, fill(m, length(pts)), kfun; randomize=randomize) 
+end
+
+function knnconfig(data, pts::Vector{Float64}, m::Int, kfun; randomize=false)
+  _pts = [SA[x] for x in pts]
+  knnconfig(data, _pts, m, kfun; randomize=randomize)
 end
 
 # An internal function that takes an existing configuration and _new_ locations
@@ -231,7 +252,7 @@ function _fsa_config(_cfg, fsa_pts, fsa_data)
   cfg
 end
 
-function fsa_knnconfig(pts, data, kernel, mfsa, mknn)
+function fsa_knnconfig(data, pts, mknn, mfsa, kernel; randomize=true)
   tree    = KDTree(pts)
   fsa_ix  = 1:div(length(pts), mfsa):length(pts)
   fsa_pts = pts[fsa_ix]
@@ -240,7 +261,7 @@ function fsa_knnconfig(pts, data, kernel, mfsa, mknn)
   res_dat = copy(data)
   deleteat!(res_pts, fsa_ix)
   deleteat!(res_dat, fsa_ix)
-  res_cfg = knnconfig(res_dat, res_pts, mknn, kernel; randomize=true)
+  res_cfg = knnconfig(res_dat, res_pts, mknn, kernel; randomize=randomize)
   _fsa_config(res_cfg, fsa_pts, fsa_dat)
 end
 

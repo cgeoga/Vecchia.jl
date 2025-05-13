@@ -31,6 +31,13 @@ function knnpredict(vc::VecchiaConfig{H,D,F}, params,
   knnpredict(vpts, vdata, vc.kernel, params, pred_pts, ncondition)
 end
 
+function knnpredict(vc::VecchiaConfig{H,1,F}, params,
+                    pred_pts::Vector{Float64};
+                    ncondition=maximum(length, vc.condix)) where{H,F}
+  _pred_pts = [SA[x] for x in pred_pts]
+  knnpredict(vc, params, _pred_pts; ncondition=ncondition)
+end
+
 function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
                          pred_pts::Vector{SVector{D,Float64}};
                          ncondition=maximum(length, vc.condix)) where{H,D,F}
