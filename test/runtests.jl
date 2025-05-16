@@ -25,7 +25,8 @@ sim    = randn(rng, length(pts))
 
 # Create a vecc object that uses enough block-conditioning points that the
 # likelihood evaluation is exact.
-vecc       = Vecchia.kdtreeconfig(sim, pts, 5, 3, kernel)
+vecc1      = Vecchia.kdtreeconfig(sim, pts, 5, 3, kernel)
+vecc2      = knnconfig(sim, pts, 10, kernel)
 vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
 
 # Test 1: nll gives the exact likelihood for a vecchia config where the
@@ -43,20 +44,20 @@ new_data  = range(0.0, 1.0, length=length(sim))
 joint_cfg = Vecchia.kdtreeconfig(hcat(sim, new_data), pts, 5, 3, kernel)
 new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, kernel)
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
-               Vecchia.nll(vecc, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
+               Vecchia.nll(vecc1, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
 end
 
 # Test 7: confirm that the rchol-based nll is equal to the standard nll.
 @testset "rchol nll" begin
-rchol_nll = Vecchia.nll_rchol(vecc, ones(3), issue_warning=false)
-@test isapprox(rchol_nll, Vecchia.nll(vecc, ones(3)))
+rchol_nll = Vecchia.nll_rchol(vecc2, ones(3), issue_warning=false)
+@test isapprox(rchol_nll, Vecchia.nll(vecc2, ones(3)))
 end
 
 # Test 8: confirm that the rchol built with tiles and without tiles gives the
 # same result:
 @testset "rchol tiles" begin
-U = Vecchia.rchol(vecc, ones(3), issue_warning=false)
-U_tiles = Vecchia.rchol(vecc, ones(3), use_tiles=true, issue_warning=false)
+U = Vecchia.rchol(vecc1, ones(3), issue_warning=false)
+U_tiles = Vecchia.rchol(vecc1, ones(3), use_tiles=true, issue_warning=false)
 @test U.diagonals == U_tiles.diagonals
 @test U.odiagonals == U_tiles.odiagonals
 end

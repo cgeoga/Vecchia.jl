@@ -2,8 +2,9 @@
 # TODO (cg 2025/04/14 10:21): Would be very easy to make this parallel. 
 function knnpredict(pts::Vector{SVector{D,Float64}}, data::Matrix{Float64}, kernel::K, 
                     params, pred_pts::Vector{SVector{D,Float64}}, ncondition) where{D,K}
-  tree  = KDTree(pts)
-  idxs  = knn(tree, pred_pts, ncondition)[1]
+  tree = HierarchicalNSW(pts)
+  add_to_graph!(tree)
+  idxs         = knn_search(tree, pred_pts, ncondition)[1]
   pts_buf      = Vector{SVector{2,Float64}}(undef, ncondition)
   marginal_buf = zeros(ncondition, ncondition)
   cross_buf    = zeros(ncondition)
@@ -49,11 +50,13 @@ function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
   # given and prediction points.
   jcondix = copy(vc.condix)
   sizehint!(jcondix, length(vc.condix) + length(pred_pts)) # could also pre-allocate
+  tree    = HierarchicalNSW(vcat(pts, pred_pts))
+  add_to_graph!(tree, 1:length(pts))
   for k in eachindex(pred_pts)
-    tree       = KDTree(vcat(pts, pred_pts[1:(k-1)]))
-    k_cond_ixs = NearestNeighbors.knn(tree, pred_pts[k], min(ncondition, n+(k-1)))[1]
+    k_cond_ixs = Int64.(knn_search(tree, pred_pts[k], min(ncondition, n+(k-1)))[1])
     sort!(k_cond_ixs)
     push!(jcondix, k_cond_ixs)
+    k < length(pred_pts) && add_to_graph!(tree, [k+length(pts)])
   end
   # create the augmented/joint point list (for now, just singleton predictions):
   jpts  = vcat(vc.pts, [[x] for x in pred_pts])
@@ -97,13 +100,14 @@ function cond_sim(vc::Vecchia.VecchiaConfig{H,D,F}, params,
   # given and prediction points.
   jcondix = copy(vc.condix)
   sizehint!(jcondix, length(vc.condix) + length(pred_pts)) # could also pre-allocate
-  # TODO (cg 2024/12/27 10:17): I really would like to switch to a dynamic tree
-  # object for kNN queries. I expect that that is the clear bottleneck here.
+  tree    = HierarchicalNSW(vcat(pts, pred_pts))
+  add_to_graph!(tree, 1:length(pts))
   for k in eachindex(pred_pts)
     tree       = KDTree(vcat(pts, pred_pts[1:(k-1)]))
-    k_cond_ixs = NearestNeighbors.knn(tree, pred_pts[k], min(ncondition, n+(k-1)))[1]
+    k_cond_ixs = Int64.(knn_search(tree, pred_pts[k], min(ncondition, n+(k-1)))[1])
     sort!(k_cond_ixs)
     push!(jcondix, k_cond_ixs)
+    k < length(pred_pts) && add_to_graph!(tree, [k+length(pts)])
   end
   # create the augmented/joint point list (for now, just singleton predictions):
   jpts  = vcat(vc.pts, [[x] for x in pred_pts])
