@@ -1,5 +1,5 @@
 
-using GALAHAD, Accessors, ForwardDiff
+using GALAHAD, ForwardDiff
 
 # Unlike in example_estimate_*.jl, the data here has also been polluted with
 # additive noise, which sort of ruins the screening effect. So we recently wrote

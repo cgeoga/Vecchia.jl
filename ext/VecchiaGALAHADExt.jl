@@ -1,7 +1,8 @@
 
 module VecchiaGALAHADExt
 
-  using Vecchia, GALAHAD, Accessors, ForwardDiff
+  using Vecchia, GALAHAD, ForwardDiff
+  using Vecchia.Accessors
 
   struct userdata_trb{Float64}
     p::Float64

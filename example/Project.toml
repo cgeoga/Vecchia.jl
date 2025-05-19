@@ -1,5 +1,4 @@
 [deps]
-Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 BesselK = "432ab697-7a72-484f-bc4a-bc531f5c819b"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 GALAHAD = "c591611e-c43e-4808-98fb-ce4cafe3a717"

@@ -1,5 +1,5 @@
 
-using GALAHAD, Accessors, ForwardDiff
+using GALAHAD, ForwardDiff
 
 # This just simulates some data and stuff. Assuming that you have data already
 # in your application, no need to read this file.
