@@ -1,17 +1,27 @@
 
 # TODO (cg 2025/04/14 10:21): Would be very easy to make this parallel. 
 function knnpredict(pts::Vector{SVector{D,Float64}}, data::Matrix{Float64}, kernel::K, 
-                    params, pred_pts::Vector{SVector{D,Float64}}, ncondition) where{D,K}
-  tree = HierarchicalNSW(pts)
+                    params, pred_pts::Vector{SVector{D,Float64}}, ncondition, 
+                    fsa_indices=Union{Vector{Int64}, nothing}) where{D,K}
+  fsalen = isnothing(fsa_indices) ? 0 : length(fsa_indices)
+  tree   = HierarchicalNSW(pts)
   add_to_graph!(tree)
-  idxs         = knn_search(tree, pred_pts, ncondition)[1]
-  pts_buf      = Vector{SVector{2,Float64}}(undef, ncondition)
-  marginal_buf = zeros(ncondition, ncondition)
-  cross_buf    = zeros(ncondition)
-  out          = zeros(length(pred_pts), size(data, 2))
+  idxs = if isnothing(fsa_indices)
+    [Int64.(x) for x in knn_search(tree, pred_pts, ncondition)[1]]
+  else
+    [sort(unique(vcat(fsa_indices, Int64.(x))))
+     for x in knn_search(tree, pred_pts, ncondition)[1]]
+  end
+  szmax         = ncondition + fsalen
+  _marginal_buf = zeros(szmax, szmax)
+  _cross_buf    = zeros(szmax)
+  out           = zeros(length(pred_pts), size(data, 2))
   for j in eachindex(pred_pts)
-    cpts = view(pts, idxs[j])
-    for k in 1:ncondition
+    szj          = length(idxs[j])
+    marginal_buf = view(_marginal_buf, 1:szj, 1:szj)
+    cross_buf    = view(_cross_buf, 1:szj)
+    cpts         = view(pts, idxs[j])
+    for k in 1:szj
       cross_buf[k] = kernel(cpts[k], pred_pts[j], params)
     end
     updatebuf!(marginal_buf, cpts, cpts, kernel, params, skipltri=true)
@@ -26,17 +36,19 @@ end
 
 function knnpredict(vc::VecchiaConfig{H,D,F}, params,
                     pred_pts::Vector{SVector{D,Float64}};
-                    ncondition=maximum(length, vc.condix)) where{H,D,F}
+                    ncondition=maximum(length, vc.condix),
+                    fsa_indices=nothing) where{H,D,F}
   vpts  = reduce(vcat, vc.pts)
   vdata = reduce(vcat, vc.data)
-  knnpredict(vpts, vdata, vc.kernel, params, pred_pts, ncondition)
+  knnpredict(vpts, vdata, vc.kernel, params, pred_pts, ncondition, fsa_indices)
 end
 
 function knnpredict(vc::VecchiaConfig{H,1,F}, params,
                     pred_pts::Vector{Float64};
-                    ncondition=maximum(length, vc.condix)) where{H,F}
+                    ncondition=maximum(length, vc.condix),
+                    fsa_indices=nothing) where{H,F}
   _pred_pts = [SA[x] for x in pred_pts]
-  knnpredict(vc, params, _pred_pts; ncondition=ncondition)
+  knnpredict(vc, params, _pred_pts; ncondition=ncondition, fsa_indices=fsa_indices)
 end
 
 function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
