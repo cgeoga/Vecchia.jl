@@ -1,79 +1,121 @@
 
-# TODO (cg 2025/04/14 10:21): Would be very easy to make this parallel. 
-function knnpredict(pts::Vector{SVector{D,Float64}}, data::Matrix{Float64}, kernel::K, 
-                    params, pred_pts::Vector{SVector{D,Float64}}, ncondition, 
-                    fsa_indices=Union{Vector{Int64}, nothing}) where{D,K}
-  fsalen = isnothing(fsa_indices) ? 0 : length(fsa_indices)
-  tree   = HierarchicalNSW(pts)
-  add_to_graph!(tree)
-  idxs = if isnothing(fsa_indices)
-    [Int64.(x) for x in knn_search(tree, pred_pts, ncondition)[1]]
-  else
-    [sort(unique(vcat(fsa_indices, Int64.(x))))
-     for x in knn_search(tree, pred_pts, ncondition)[1]]
+"""
+`PredictionConfig(cfg::VecchiaConfig, pred_pts, ncondition; [fixed_use_indices=nothing, separable=false])`
+
+A structure representing a Vecchia-accelerated prediction problem. Internally, conditioning
+data and its conditioning set (from `cfg`) are joined with the new prediction points, which 
+are put at the end so that there is the greatest pool of conditioning points to select from.
+
+ARGUMENTS:
+
+- `cfg::VecchiaConfig`: the base `VecchiaConfig` object specifying the data you have and the conditioning sets for each measurement.
+
+- `pred_pts`: a vector of points (either `Vector{SVector{D,Float64}}` or `Vector{Float64}`) to predict at.
+
+- `ncondition`: the number of knn points to condition on for each prediction location.
+
+OPTIONAL KEYWORD ARGUMENTS:
+
+- `fixed_use_indices=nothing`: all with `ncondition` many nearest neighbors, you can provide additional indices to add to each conditioning set for the prediction points.
+
+- `separable=false`: an indicator flag to determine whether or not to allow one prediction point to be in the conditioning set of another. If you do allow that, then you can only predict the unknown values jointly, and it requires assembling the reverse Cholesky factor. This is O(n) work and scalable, but has a higher prefactor than the alternative. Depending on your problem, `separable=true` may work nearly as well and be much faster.
+"""
+struct PredictionConfig{D,F}
+  kernel::F
+  pts::Vector{SVector{D,Float64}}
+  data::Matrix{Float64}
+  condix::Vector{Vector{Int64}}
+  separable::Bool
+end
+
+function PredictionConfig(cfg::VecchiaConfig{H,D,F}, pred_pts::Vector{SVector{D,Float64}},
+                          ncondition; fixed_use_indices=nothing, separable=false) where{H,D,F}
+  check_singleton_sets(cfg)
+  n      = length(cfg.condix)
+  jpts   = vcat(reduce(vcat, cfg.pts), pred_pts)
+  data   = reduce(vcat, cfg.data)
+  condix = copy(cfg.condix)
+  if fixed_use_indices isa AbstractVector{Int64}
+    fixed_use_indices = fill(fixed_use_indices, length(pred_pts))
   end
-  szmax         = ncondition + fsalen
+  tree    = HierarchicalNSW(jpts)
+  add_to_graph!(tree, 1:n)
+  for j in eachindex(pred_pts)
+    knns = Int64.(knn_search(tree, pred_pts[j], ncondition)[1])
+    if !isnothing(fixed_use_indices)
+      knns = sort(unique(vcat(fixed_use_indices[j], knns)))
+    end
+    push!(condix, knns)
+    (!separable && (j < length(pred_pts))) && add_to_graph!(tree, n+j)
+  end
+  PredictionConfig(cfg.kernel, jpts, data, condix, separable)
+end
+
+function PredictionConfig(cfg::VecchiaConfig{H,1,F}, pred_pts::Vector{Float64},
+                          ncondition; fixed_use_indices=nothing, separable=false) where{H,F}
+  PredictionConfig(cfg, [SA[x] for x in pred_pts], ncondition;
+                   fixed_use_indices=fixed_use_indices, separable=separable)
+end
+
+function jointconfig(pcfg::PredictionConfig{D,F}) where{D,F}
+  (n, m) = (size(pcfg.data, 1), length(pcfg.pts) - size(pcfg.data, 1))
+  _data  = hcat.(eachrow(pcfg.data))
+  _pts   = [[x] for x in pcfg.pts]
+  jcfg   = VecchiaConfig(pcfg.kernel, _data, _pts, pcfg.condix)
+  (n, m, jcfg)
+end
+
+function _joint_knnpredict(pcfg::PredictionConfig{D,F}, params) where {D,F}
+  (n, m, jcfg) = jointconfig(pcfg)
+  Us     = UpperTriangular(sparse(rchol(jcfg, params; issue_warning=false)))
+  em     = zeros(m+n, m)
+  foreach(j->(em[n+j,j] = 1.0), 1:m)
+  cols   = adjoint(Us)\(Us\em)
+  pred_pts_marginal = cols[(n+1):(n+m), :]
+  pred_pts_cross    = cols[1:n, :]
+  Usnn = UpperTriangular(Us[1:n, 1:n])
+  solved_cross = Usnn*(Usnn'*pred_pts_cross) 
+  solved_cross'*reduce(vcat, pcfg.data)
+end
+
+function _separable_knnpredict(pcfg::PredictionConfig{D,F}, params) where{D,F}
+  (n, m)        = (size(pcfg.data, 1), length(pcfg.pts) - size(pcfg.data, 1))
+  pcondix       = view(pcfg.condix, (n+1):(n+m))
+  pts           = view(pcfg.pts, 1:n)
+  ppts          = view(pcfg.pts, (n+1):(n+m))
+  szmax         = maximum(length, pcondix)
   _marginal_buf = zeros(szmax, szmax)
   _cross_buf    = zeros(szmax)
-  out           = zeros(length(pred_pts), size(data, 2))
-  for j in eachindex(pred_pts)
-    szj          = length(idxs[j])
+  out           = zeros(m, size(pcfg.data, 2))
+  for j in eachindex(ppts)
+    szj          = length(pcondix[j])
     marginal_buf = view(_marginal_buf, 1:szj, 1:szj)
     cross_buf    = view(_cross_buf, 1:szj)
-    cpts         = view(pts, idxs[j])
+    cpts         = view(pts, pcondix[j])
     for k in 1:szj
-      cross_buf[k] = kernel(cpts[k], pred_pts[j], params)
+      cross_buf[k] = pcfg.kernel(cpts[k], ppts[j], params)
     end
-    updatebuf!(marginal_buf, cpts, cpts, kernel, params, skipltri=true)
+    updatebuf!(marginal_buf, cpts, cpts, pcfg.kernel, params, skipltri=true)
     marginal_cov_f = cholesky!(Symmetric(marginal_buf))
     ldiv!(marginal_cov_f, cross_buf)
-    for k in 1:size(data, 2)
-      out[j,k] = dot(cross_buf, view(data, idxs[j], k))
+    for k in 1:size(pcfg.data, 2)
+      out[j,k] = dot(cross_buf, view(pcfg.data, pcondix[j], k))
     end
   end
   out
 end
 
-function knnpredict(vc::VecchiaConfig{H,D,F}, params,
-                    pred_pts::Vector{SVector{D,Float64}};
-                    ncondition=maximum(length, vc.condix),
-                    fsa_indices=nothing) where{H,D,F}
-  vpts  = reduce(vcat, vc.pts)
-  vdata = reduce(vcat, vc.data)
-  knnpredict(vpts, vdata, vc.kernel, params, pred_pts, ncondition, fsa_indices)
-end
-
-function knnpredict(vc::VecchiaConfig{H,1,F}, params,
-                    pred_pts::Vector{Float64};
-                    ncondition=maximum(length, vc.condix),
-                    fsa_indices=nothing) where{H,F}
-  _pred_pts = [SA[x] for x in pred_pts]
-  knnpredict(vc, params, _pred_pts; ncondition=ncondition, fsa_indices=fsa_indices)
-end
-
-function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
-                         pred_pts::Vector{SVector{D,Float64}};
-                         ncondition=maximum(length, vc.condix)) where{H,D,F}
-  # get the given data points and make a tree for fast conditioning set
-  # collection.
-  (n, m) = (sum(length, vc.pts), length(pred_pts))
-  pts    = reduce(vcat, vc.pts)
-  # create the new conditioning set elements for the joint configuration of
-  # given and prediction points.
-  jcondix = copy(vc.condix)
-  sizehint!(jcondix, length(vc.condix) + length(pred_pts)) # could also pre-allocate
-  tree    = HierarchicalNSW(vcat(pts, pred_pts))
-  add_to_graph!(tree, 1:length(pts))
-  for k in eachindex(pred_pts)
-    k_cond_ixs = Int64.(knn_search(tree, pred_pts[k], min(ncondition, n+(k-1)))[1])
-    sort!(k_cond_ixs)
-    push!(jcondix, k_cond_ixs)
-    k < length(pred_pts) && add_to_graph!(tree, [k+length(pts)])
+function knnpredict(pcfg::PredictionConfig{D,F}, params) where{D,F}
+  if pcfg.separable
+    return _separable_knnpredict(pcfg, params)
+  else
+    return _joint_knnpredict(pcfg, params)
   end
-  # create the augmented/joint point list (for now, just singleton predictions):
-  jpts  = vcat(vc.pts, [[x] for x in pred_pts])
-  # create the final joint config object, not actually using any data.
-  jcfg  = VecchiaConfig(vc.kernel, [fill(NaN, (1,1)) for _ in 1:length(jpts)], jpts, jcondix)
+end
+
+function dense_posterior(pcfg::PredictionConfig{D,F}, params) where{D,F}
+  pcfg.separable && @warn "'Separable' PredictionConfig objects may lead to unrealistic conditional simulations. Proceed with caution."
+  (n, m, jcfg)  = jointconfig(pcfg)
   # for getting the necessary blocks of the actual covariance matrix, consider
   # the following. If Σ^{-1} = U U^T, then Σ v = U^{-T} (U^{-1} v). And to get
   # the Vecchia-implied marginal covariance of the points we are predicting at
@@ -91,47 +133,23 @@ function dense_posterior(vc::VecchiaConfig{H,D,F}, params,
   # that can be applied with just the [1:n, 1:n] block of Us.
   Usnn = UpperTriangular(Us[1:n, 1:n])
   solved_cross = Usnn*(Usnn'*pred_pts_cross) # Σ_{data}^{-1} Σ_{cross}
-  cond_mean    = solved_cross'*reduce(vcat, vc.data)
+  cond_mean    = solved_cross'*reduce(vcat, pcfg.data)
   cond_var     = pred_pts_marginal - solved_cross'pred_pts_cross
-  # return:
   (;cond_mean, cond_var)
 end
 
-
-function cond_sim(vc::Vecchia.VecchiaConfig{H,D,F}, params,
-                  pred_pts::Vector{SVector{D,Float64}};
-                  ncondition=maximum(length, vc.condix)) where{H,D,F}
-  if ncondition < 30
+# TODO (cg 2025/05/29 12:18): accept an RNG?
+function cond_sim(pcfg::PredictionConfig{D,F}, params) where{D,F}
+  pcfg.separable && @warn "'Separable' PredictionConfig objects may lead to unrealistic conditional simulations. Proceed with caution."
+  (n, m, jcfg) = jointconfig(pcfg)
+  if minimum(length, jcfg.condix[(n+1):end]) < 30
     @warn "For small numbers of conditioning points (<= 30 from slight anecdata), this method can give poor results. See issue #10 on github for more details." 
   end
-  # get the given data points and make a tree for fast conditioning set
-  # collection.
-  (n, m) = (sum(length, vc.pts), length(pred_pts))
-  pts    = reduce(vcat, vc.pts)
-  # create the new conditioning set elements for the joint configuration of
-  # given and prediction points.
-  jcondix = copy(vc.condix)
-  sizehint!(jcondix, length(vc.condix) + length(pred_pts)) # could also pre-allocate
-  tree    = HierarchicalNSW(vcat(pts, pred_pts))
-  add_to_graph!(tree, 1:length(pts))
-  for k in eachindex(pred_pts)
-    tree       = KDTree(vcat(pts, pred_pts[1:(k-1)]))
-    k_cond_ixs = Int64.(knn_search(tree, pred_pts[k], min(ncondition, n+(k-1)))[1])
-    sort!(k_cond_ixs)
-    push!(jcondix, k_cond_ixs)
-    k < length(pred_pts) && add_to_graph!(tree, [k+length(pts)])
-  end
-  # create the augmented/joint point list (for now, just singleton predictions):
-  jpts  = vcat(vc.pts, [[x] for x in pred_pts])
-  # create the final joint config object. The data being passed in here isn't a
-  # compliant size, but we'll never touch it.
-  jcfg  = Vecchia.VecchiaConfig(vc.kernel, [hcat(NaN) for _ in eachindex(jpts)], 
-                                jpts, jcondix)
   Us    = sparse(Vecchia.rchol(jcfg, params))
   Usnn  = Us[1:n, 1:n]
   # conditional simulation using standard tricks with Cholesky factors:
-  data  = reduce(vcat, vc.data)
-  rawwn = randn(length(pred_pts), size(data, 2))
+  data  = reduce(vcat, pcfg.data)
+  rawwn = randn(m, size(data, 2))
   jwn   = vcat(Usnn'*data, rawwn)
   sims=(Us'\jwn)[(n+1):end, :]
 end

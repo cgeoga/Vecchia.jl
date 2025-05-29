@@ -15,6 +15,13 @@ end
 blockrank(cfg::VecchiaConfig) = maximum(length, cfg.condix)
 chunksize(cfg::VecchiaConfig) = maximum(length, cfg.pts)
 
+function check_singleton_sets(cfg::VecchiaConfig)
+  if chunksize(cfg) > 1
+    throw(error("This method is only implemented for singleton prediction sets. Please open an issue if there is missing functionality you need."))
+  end
+  nothing
+end
+
 # A hacky function to return an empty Int64[] for the first conditioning set.
 @inline cond_ixs(j, r) = j == 1 ? Int64[] : collect(max(1,j-r):max(1,j-1))
 

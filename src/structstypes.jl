@@ -215,7 +215,7 @@ function knnconfig(data, pts, m::Int64, kfun; randomize=false)
 end
 
 function knnconfig(data, pts::Vector{SVector{1,Float64}}, mv::AbstractVector{Int64}, kfun; 
-                   randomize=false)
+                   randomize=false, sort=true)
   randomize && @info "randomize=true flag ignored since in 1D a natural ordering is possible."
   _pts  = getindex.(pts, 1)
   sp    = sortperm(_pts)
@@ -226,13 +226,14 @@ function knnconfig(data, pts::Vector{SVector{1,Float64}}, mv::AbstractVector{Int
 end
 
 function knnconfig(data, pts::Vector{SVector{1,Float64}}, m::Int, kfun; 
-                   randomize=false)
-  knnconfig(data, pts, fill(m, length(pts)), kfun; randomize=randomize) 
+                   randomize=false, sort=true)
+  knnconfig(data, pts, fill(m, length(pts)), kfun; randomize=randomize, sort=sort) 
 end
 
-function knnconfig(data, pts::Vector{Float64}, m::Int, kfun; randomize=false)
+function knnconfig(data, pts::Vector{Float64}, m::Int, kfun; 
+                   randomize=false, sort=true)
   _pts = [SA[x] for x in pts]
-  knnconfig(data, _pts, m, kfun; randomize=randomize)
+  knnconfig(data, _pts, m, kfun; randomize=randomize, sort=sort)
 end
 
 # An internal function that takes an existing configuration and _new_ locations

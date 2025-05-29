@@ -18,6 +18,7 @@ mle     = Vecchia.vecchia_estimate(cfg, init[1:3], solver;
 
 # Once you have fitted your model, you can predict using the same style of knn
 # conditioning:
-preds = knnpredict(cfg, mle, pts_hold; ncondition=80)
+pcfg  = PredictionConfig(cfg, pts_hold, 80)
+preds = knnpredict(pcfg, mle)
 @show maximum(abs, preds - holdout_truth)
 

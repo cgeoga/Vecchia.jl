@@ -69,8 +69,9 @@ end
   ppts = rand(SVector{2,Float64}, 10)
   data = cholesky([kernel(x, y, (1.0, 0.1)) for x in pts, y in pts]).L*randn(length(pts))
 
-  cfg  = Vecchia.knnconfig(data, pts, 50, kernel)
-  (test_cond_mean, test_cond_var) = Vecchia.dense_posterior(cfg, [1.0, 0.1], ppts, ncondition=50)
+  cfg  = knnconfig(data, pts, 50, kernel)
+  pcfg = PredictionConfig(cfg, ppts, 50)
+  (test_cond_mean, test_cond_var) = Vecchia.dense_posterior(pcfg, [1.0, 0.1])
 
   S1   = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in pts]
   S12  = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in ppts]
