@@ -29,7 +29,8 @@ struct PredictionConfig{D,F}
 end
 
 function PredictionConfig(cfg::VecchiaConfig{H,D,F}, pred_pts::Vector{SVector{D,Float64}},
-                          ncondition; fixed_use_indices=nothing, separable=false) where{H,D,F}
+                          ncondition; fixed_use_indices=nothing, 
+                          skip_indices=Int64[], separable=false) where{H,D,F}
   check_singleton_sets(cfg)
   n      = length(cfg.condix)
   jpts   = vcat(reduce(vcat, cfg.pts), pred_pts)
@@ -38,8 +39,9 @@ function PredictionConfig(cfg::VecchiaConfig{H,D,F}, pred_pts::Vector{SVector{D,
   if fixed_use_indices isa AbstractVector{Int64}
     fixed_use_indices = fill(fixed_use_indices, length(pred_pts))
   end
-  tree    = HierarchicalNSW(jpts)
-  add_to_graph!(tree, 1:n)
+  tree = HierarchicalNSW(jpts)
+  usable_indices = setdiff(1:n, skip_indices)
+  add_to_graph!(tree, usable_indices)
   for j in eachindex(pred_pts)
     knns = Int64.(knn_search(tree, pred_pts[j], ncondition)[1])
     if !isnothing(fixed_use_indices)
