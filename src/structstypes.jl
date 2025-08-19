@@ -192,13 +192,14 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   VecchiaConfig{H,D,F}(kfun, dat_out, pts_out, condix)
 end
 
-function knnconfig(data, pts, blockranks, kfun; randomize=false)
+function knnconfig(data, pts, blockranks, kfun; 
+                   randomize=false, metric=Euclidean())
   if randomize
     p = Random.randperm(length(pts))
     return knnconfig(data[p,:], pts[p], blockranks[p], kfun; randomize=false)
   end
   condix = [Int64[]]
-  tree   = HierarchicalNSW(pts)
+  tree   = HierarchicalNSW(pts; metric=metric)
   for j in 2:length(pts)
     add_to_graph!(tree, [j-1])
     ptj  = pts[j]
@@ -206,12 +207,12 @@ function knnconfig(data, pts, blockranks, kfun; randomize=false)
     push!(condix, sort(idxs))
   end
   pts = [[x] for x in pts]
-  dat = hcat.(eachrow(data)) 
+  dat = collect.(permutedims.(eachrow(data)))
   VecchiaConfig(kfun, dat, pts, condix)
 end
 
-function knnconfig(data, pts, m::Int64, kfun; randomize=false)
-  knnconfig(data, pts, fill(m, length(pts)), kfun; randomize=randomize)
+function knnconfig(data, pts, m::Int64, kfun; randomize=false, metric=Euclidean())
+  knnconfig(data, pts, fill(m, length(pts)), kfun; randomize=randomize, metric=metric)
 end
 
 function knnconfig(data, pts::Vector{SVector{1,Float64}}, mv::AbstractVector{Int64}, kfun; 
