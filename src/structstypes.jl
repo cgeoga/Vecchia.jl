@@ -267,3 +267,18 @@ function fsa_knnconfig(data, pts, mknn, mfsa, kernel; randomize=true)
   _fsa_config(res_cfg, fsa_pts, fsa_dat)
 end
 
+function maximinconfig(::Val{D}, data, ptsm::Matrix{Float64}, 
+                       rho::Float64, kernel) where{D}
+  (P, ℓ, sn) = ordering_and_sparsity_pattern(ptsm, rho)
+  condix = supernodes_to_condix(size(ptsm, 2), sn)
+  _data  = data[P,:]
+  _pts   = SVector{D,Float64}.(eachcol(ptsm[:,P]))
+  VecchiaConfig(kernel, hcat.(eachrow(_data)), [[x] for x in _pts], condix)
+end
+
+function maximinconfig(data, pts::Vector{SVector{D,Float64}}, 
+                       rho::Float64, kernel) where{D}
+  ptsm = reduce(hcat, pts)
+  maximinconfig(Val(D), data, ptsm, rho, kernel)
+end
+

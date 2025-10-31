@@ -58,7 +58,7 @@ end
 @testset "rchol tiles" begin
 U = Vecchia.rchol(vecc1, ones(3), issue_warning=false)
 U_tiles = Vecchia.rchol(vecc1, ones(3), use_tiles=true, issue_warning=false)
-@test U.diagonals == U_tiles.diagonals
+@test U.diagonals  == U_tiles.diagonals
 @test U.odiagonals == U_tiles.odiagonals
 end
 
