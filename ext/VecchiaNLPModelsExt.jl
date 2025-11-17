@@ -77,15 +77,12 @@ module VecchiaNLPModelsExt
   end
 
 
-  #=
-  function Vecchia.optimize(obj, init, solver::UnoNLPSolver;
+  function Vecchia.optimize(obj, init, solver::Vecchia.NLPModelsSolver, 
                             box_lower=fill(0.0, length(init)),
                             box_upper=fill(Inf, length(init)))
-    nlp = VecchiaNLPModel(obj, init, box_lower, box_upper, Dict(kwargs))
-    (model, solver) = uno
-    res = solver(nlp)
+    nlp = Vecchia.nlp(obj, init, box_lower=box_lower, box_upper=box_upper)
+    solver.solver(nlp; solver.opts...).solution
   end
-  =#
 
 end
 

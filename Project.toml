@@ -15,16 +15,13 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [weakdeps]
-ADNLPModels = "54578032-b7ea-4c30-94aa-7cbd1cce6c9a"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-GALAHAD = "c591611e-c43e-4808-98fb-ce4cafe3a717"
-JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
+UnoSolver = "1baa60ac-02f7-4b39-a7a8-2f4f58486b05"
 
 [extensions]
-VecchiaGALAHADExt = ["GALAHAD", "ForwardDiff"]
-VecchiaJuMPExt = ["JuMP", "ForwardDiff"]
 VecchiaNLPModelsExt = ["NLPModels", "ForwardDiff"]
+VecchiaUnoSolverExt = ["NLPModels", "ForwardDiff", "UnoSolver"]
 
 [compat]
 Accessors = "0.1.42"

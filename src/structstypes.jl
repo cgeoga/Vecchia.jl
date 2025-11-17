@@ -3,6 +3,11 @@ const PrecisionPiece{T} = Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
 
 abstract type AbstractVecchiaConfig{H,D,F} end
 
+struct NLPModelsSolver{S,T}
+  solver::S
+  opts::Dict{Symbol, T}
+end
+
 function nlp end
 
 struct ErrorKernel{K,E} <: Function
