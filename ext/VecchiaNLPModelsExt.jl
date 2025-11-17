@@ -50,7 +50,8 @@ module VecchiaNLPModelsExt
   end
 
   function NLPModels.hess_coord!(vnlp::VecchiaNLPModel{C,T,S}, 
-                                 x::Vector{Float64}, hvals::Vector{Float64}; 
+                                 x::AbstractVector{Float64}, 
+                                 hvals::AbstractVector{Float64}; 
                                  obj_weight=1) where{C,T,S}
     _h = try
       ForwardDiff.hessian(vnlp.cfg, x)
@@ -68,14 +69,13 @@ module VecchiaNLPModelsExt
     hvals
   end
 
-  function NLPModels.hprod!(vnlp::VecchiaNLPModel{C,T,S}, x::Vector{Float64}, 
-                            v::Vector{Float64}, Hv::Vector{Float64}; 
-                            obj_weight=1) where{C,T,S}
-    _grad(t) = ForwardDiff.gradient(vnlp.cfg, t)
-    _Hv = ForwardDiff.derivative(α -> _grad(x + α*v), 0.0)
-    Hv .= _Hv*obj_weight
+  function NLPModels.hess_coord!(vnlp::VecchiaNLPModel{C,T,S}, 
+                                 x::AbstractVector{Float64}, 
+                                 y, # dummy value I am ignoring
+                                 hvals::AbstractVector{Float64}; 
+                                 obj_weight=1) where{C,T,S}
+    hess_coord!(vnlp, x, hvals; obj_weight=obj_weight)
   end
-
 
   function Vecchia.optimize(obj, init, solver::Vecchia.NLPModelsSolver, 
                             box_lower=fill(0.0, length(init)),
