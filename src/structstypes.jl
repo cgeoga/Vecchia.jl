@@ -3,6 +3,8 @@ const PrecisionPiece{T} = Tuple{Vector{Int64}, Vector{Int64}, Vector{T}}
 
 abstract type AbstractVecchiaConfig{H,D,F} end
 
+function nlp end
+
 struct ErrorKernel{K,E} <: Function
   kernel::K
   error::E
@@ -12,6 +14,11 @@ struct TRBSolver
   print_level::Int64
 end
 TRBSolver(;verbose::Bool=true) = TRBSolver(verbose ? 1 : 0)
+
+struct UnoNLPSolver
+  preset::String 
+end
+UnoNLPSolver(;preset="filtersqp") = UnoNLPSolver(preset)
 
 function optimize end
 
