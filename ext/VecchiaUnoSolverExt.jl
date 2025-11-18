@@ -7,9 +7,8 @@ module VecchiaUnoSolverExt
                             box_lower=fill(0.0, length(init)),
                             box_upper=fill(Inf, length(init)))
     nlp = Vecchia.nlp(obj, init, box_lower=box_lower, box_upper=box_upper)
-    return nlp
     (model, solver) = uno(nlp, false; preset="filtersqp", 
-                          print_solution=false, operator_available=false)
+                          print_solution=false)
     UnoSolver.uno_get_primal_solution(solver, zeros(length(init)))
   end
 

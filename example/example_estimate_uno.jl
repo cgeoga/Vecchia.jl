@@ -8,7 +8,7 @@ include("example_setup.jl")
 # Create the VecchiaConfig, which specifies the prediction and conditioning
 # sets. This knn- and random ordering-based configuration is a generic choice
 # that works well in many settings.
-const cfg = maximinconfig(sim, pts, 2.0, matern)
+const cfg = knnconfig(sim, pts, 10, matern)
 
 est = Vecchia.optimize(cfg, init[1:3], Vecchia.UnoNLPSolver();
                        box_lower=[1e-8, 1e-8, 0.25], 
