@@ -20,7 +20,6 @@ NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 UnoSolver = "1baa60ac-02f7-4b39-a7a8-2f4f58486b05"
 
 [extensions]
-VecchiaNLPModelsExt = ["NLPModels", "ForwardDiff"]
 VecchiaUnoSolverExt = ["NLPModels", "ForwardDiff", "UnoSolver"]
 
 [compat]
