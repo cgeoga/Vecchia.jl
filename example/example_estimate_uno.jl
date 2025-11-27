@@ -10,7 +10,8 @@ include("example_setup.jl")
 # that works well in many settings.
 const cfg = knnconfig(sim, pts, 10, matern)
 
-est = Vecchia.optimize(cfg, init[1:3], Vecchia.UnoNLPSolver();
+solver = NLPModelsSolver(uno; preset="filtersqp")
+est = vecchia_estimate(cfg, init[1:3], solver;
                        box_lower=[1e-8, 1e-8, 0.25], 
                        box_upper=[10.0, 10.0, 5.0])
 

@@ -13,6 +13,6 @@ const cfg = Vecchia.knnconfig(sim, pts, 10, matern)
 # Now just compute the estimator and let autodiff and Ipopt take care of the rest!
 # Note that you can provide kwargs here for the optimizer. But if you're
 # providing your own optimizer you're probably customizing more than that anyway.
-solver    = NLPModelsSolver(ipopt, Dict(:tol=>1e-4))
+solver    = NLPModelsSolver(ipopt; tol=1e-4)
 estimator = vecchia_estimate(cfg, init[1:3], solver) 
 

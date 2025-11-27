@@ -8,6 +8,8 @@ struct NLPModelsSolver{S,T}
   opts::Dict{Symbol, T}
 end
 
+NLPModelsSolver(s::S; kwargs...) where{S} = NLPModelsSolver(s, Dict(kwargs))
+
 function nlp end
 
 struct ErrorKernel{K,E} <: Function
@@ -19,11 +21,6 @@ struct TRBSolver
   print_level::Int64
 end
 TRBSolver(;verbose::Bool=true) = TRBSolver(verbose ? 1 : 0)
-
-struct UnoNLPSolver
-  preset::String 
-end
-UnoNLPSolver(;preset="filtersqp") = UnoNLPSolver(preset)
 
 function optimize end
 
@@ -279,6 +276,7 @@ function fsa_knnconfig(data, pts, mknn, mfsa, kernel; randomize=true)
   _fsa_config(res_cfg, fsa_pts, fsa_dat)
 end
 
+#=
 function maximinconfig(::Val{D}, data, ptsm::Matrix{Float64}, 
                        rho::Float64, kernel) where{D}
   (P, ℓ, sn) = ordering_and_sparsity_pattern(ptsm, rho)
@@ -293,4 +291,4 @@ function maximinconfig(data, pts::Vector{SVector{D,Float64}},
   ptsm = reduce(hcat, pts)
   maximinconfig(Val(D), data, ptsm, rho, kernel)
 end
-
+=#

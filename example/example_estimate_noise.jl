@@ -1,5 +1,5 @@
 
-using GALAHAD, ForwardDiff
+using NLPModels, UnoSolver, ForwardDiff
 
 # Unlike in example_estimate_*.jl, the data here has also been polluted with
 # additive noise, which sort of ruins the screening effect. So we recently wrote
@@ -15,17 +15,17 @@ include("example_setup.jl")
 #
 # IMPORTANT: note that the kernel function you provide here DOES NOT add the
 # nugget/measurement error variance!
-const cfg = Vecchia.knnconfig(sim, pts, 10, matern)
+const cfg = maximinconfig(sim, pts, 3.0, matern)
 
 # Now let's try to estimate that, where note that the parameters now use an
 # extra value that gives the VARIANCE of the measurement noise.
 #
-solver = Vecchia.TRBSolver(verbose=false)
+solver = NLPModelsSolver(uno; preset="filtersqp")
 em_res = em_estimate(cfg, saa, init, solver=solver, 
-                     box_lower=[1e-8, 1e-8, 0.25, 0.0],
+                     box_lower=[1e-8, 1e-8, 0.25, 1e-5],
                      box_upper=[10.0, 10.0, 5.00, 5.0],
                      errormodel=Vecchia.ScaledIdentity(length(pts)),
-                     max_em_iter=10, warn_notation=false)
+                     max_em_iter=5, norm2tol=0.0, warn_notation=false)
 
 # Your estimator is now given as the last item in your EM path:
 path    = em_res.path

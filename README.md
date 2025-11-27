@@ -62,10 +62,10 @@ few options. The first is to use [JuMP](https://github.com/jump-dev/JuMP.jl).
 Here is a demonstration of fitting your model with JuMP and
 [Ipopt](https://github.com/jump-dev/Ipopt.jl):
 ```julia
-using JuMP  # necessary to load the extension!
-using Ipopt # or any other solver 
+using ForwardDiff, NLPModels # necessary to load the optimizer extension!
+using UnoSolver # or NLPModelsIpopt, or NLPModelsKNITRO, etc
 
-solver = optimizer_with_attributes(Ipopt.Optimizer, "tol"=>1e-4)
+solver = NLPModelsSolver(uno; preset="filtersqp")
 mle    = vecchia_estimate(cfg, some_init, solver)
 ```
 Note that JuMP has bindings to many different optimizers, and this extension
@@ -74,18 +74,6 @@ best and most battle-tested libre optimizers available. It is a great default
 choice. If you have it, [KNITRO.jl](https://github.com/jump-dev/KNITRO.jl) is
 another good choice to consider here---but it is not libre, and it is certainly
 not gratis.
-
-The second option is to use [GALAHAD.jl](https://github.com/ralna/GALAHAD),
-which offers a libre trust-region based solver `trb`. Ipopt is a fantastic
-general-purpose solver, but at least sometimes the trust region methods can work
-a _lot_ better than the line search ones (like Ipopt). So you may also consider
-fitting with
-```julia
-using GALAHAD, Accessors, ForwardDiff # necessary to load the extension!
-
-solver = Vecchia.TRBSolver(;verbose=true)
-mle    = vecchia_estimate(cfg, some_init, solver)
-```
 
 **See the example files for heavily commented demonstrations.**
 

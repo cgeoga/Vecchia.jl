@@ -1,7 +1,7 @@
 name = "Vecchia"
 uuid = "8d73829f-f4b0-474a-9580-cecc8e084068"
 version = "0.10.4"
-authors = ["Chris Geoga <geoga@wisc.edu>", "Florian Schafer <florian.schaefer@nyu.edu>"]
+authors = ["Chris Geoga <geoga@wisc.edu>"]
 
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
@@ -20,6 +20,7 @@ NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 UnoSolver = "1baa60ac-02f7-4b39-a7a8-2f4f58486b05"
 
 [extensions]
+VecchiaNLPModelsExt = ["NLPModels", "ForwardDiff"]
 VecchiaUnoSolverExt = ["NLPModels", "ForwardDiff", "UnoSolver"]
 
 [compat]
