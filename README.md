@@ -85,16 +85,6 @@ a KD-tree with a specified terminal leaf size (so that each leaf is a chunk),
 re-orders those chunks based on the leaf centers, and then picks conditioning
 sets based on the user-provided size. 
 
-If you want something fancier, for example the maximin ordering of Guinness 2018
-technometrics with the NN-based conditioning sets, which was recently proved to
-have some nice properties (Schafer et al 2021 SISC), that shouldn't be very hard
-to implement after skimming the existing constructor to see what the struct
-fields in `VecchiaConfig` mean and stuff. I really made an effort to design this
-in such a way that you can specialize how you want but then just enjoy the
-painfully optimized generic log-likelihood, precision matrix, and sparse
-(reverse)-Cholesky functionality without having to rebuild from scratch every
-time.
-
 # Advanced Usage
 
 ## Estimation with a nugget/measurement error
