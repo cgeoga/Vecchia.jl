@@ -220,13 +220,16 @@ choice.
 - Conditional simulations were recently added, but that implementation would
   hugely benefit from somebody kicking the tires and playing with details and
   smart defaults/guardrails.
+- Prediction design is pretty hacky at this point. A more careful look at the
+  literature in this space and a better design would be good.
 - It would be interesting to at some point benchmark the potential improvement
-  from using memoization for kernel evaluations. In the rchol approach, there is
-  the `use_tiles={true,false}` kwarg, which effectively does manual book-keeping
-  to avoid ever evaluating the kernel for the same pair of points twice. But it
-  may be more elegant and just as fast to use memoization. This is probably
-  10-20 lines of code and an hour to benchmark and play with, so it would be a
-  great first way to tinker with Vecchia stuff.
+  from using memoization for kernel evaluations (with a potential extra twist of
+  memoizing over stationary kernel evaluations as well). In the rchol approach,
+  there is the `use_tiles={true,false}` kwarg, which effectively does manual
+  book-keeping to avoid ever evaluating the kernel for the same pair of points
+  twice. But it may be more elegant and just as fast to use memoization. This is
+  probably 10-20 lines of code and an hour to benchmark and play with, so it would
+  be a great first way to tinker with Vecchia stuff.
 - API refinement/seeking feedback. For the most part, it is me and students in
   my orbit that use this package. But I'd love for it to be more widely adopted,
   and so I'd love for the interface to be polished. For example: figuring out
