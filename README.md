@@ -58,22 +58,21 @@ submit a PR. I would be very happy to merge in a few other generic constructors
 here, because this chunked KD-tree one is not always the best choice.
 
 For estimation, thanks to Julia's cool weakdep/extension framework, you have a
-few options. The first is to use [JuMP](https://github.com/jump-dev/JuMP.jl).
-Here is a demonstration of fitting your model with JuMP and
-[Ipopt](https://github.com/jump-dev/Ipopt.jl):
+few options. My default recommendation is to use
+[Uno](https://github.com/cvanaret/uno) with the
+[NLPModels.jl](https://github.com/JuliaSmoothOptimizers/NLPModels.jl) framework.
+Here is a demonstration of fitting your model with `Uno`:
 ```julia
 using ForwardDiff, NLPModels # necessary to load the optimizer extension!
 using UnoSolver # or NLPModelsIpopt, or NLPModelsKNITRO, etc
 
-solver = NLPModelsSolver(uno; preset="filtersqp")
-mle    = vecchia_estimate(cfg, some_init, solver)
+solver  = NLPModelsSolver(uno; preset="filtersqp")
+#solver = NLPModelsSolver(ipopt; tol=1e-4) # for Ipopt
+#solver = NLPModelsSolver(knitro; algorithm=4 # for KNITRO
+mle     = vecchia_estimate(cfg, some_init, solver)
 ```
-Note that JuMP has bindings to many different optimizers, and this extension
-only requires loading JuMP. Ipopt is, in my experience and option, among the
-best and most battle-tested libre optimizers available. It is a great default
-choice. If you have it, [KNITRO.jl](https://github.com/jump-dev/KNITRO.jl) is
-another good choice to consider here---but it is not libre, and it is certainly
-not gratis.
+But feel free to bring your own solver, so long as it implements the `NLPModels`
+framework!
 
 **See the example files for heavily commented demonstrations.**
 
