@@ -12,6 +12,11 @@ NLPModelsSolver(s::S; kwargs...) where{S} = NLPModelsSolver(s, Dict(kwargs))
 
 function nlp end
 
+function adcachewrapper end
+function _primal        end
+function _gradient      end
+function _hessian       end
+
 struct ErrorKernel{K,E} <: Function
   kernel::K
   error::E

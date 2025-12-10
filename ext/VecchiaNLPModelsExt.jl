@@ -15,13 +15,15 @@ module VecchiaNLPModelsExt
   function Vecchia.nlp(cfg::C, init;
                        box_lower=fill(0.0, length(init)),
                        box_upper=fill(Inf, length(init))) where{C}
-    meta = NLPModelMeta(length(init); x0=init, lvar=box_lower, uvar=box_upper)
-    VecchiaNLPModel(cfg, meta, Counters(), length(init))
+    meta      = NLPModelMeta(length(init); x0=init, lvar=box_lower, uvar=box_upper)
+    cache_cfg = Vecchia.adcachewrapper(cfg)
+    VecchiaNLPModel(cache_cfg, meta, Counters(), length(init))
   end
 
   function NLPModels.obj(vnlp::VecchiaNLPModel{C,T,S}, x) where{C,T,S}
     return try
-      vnlp.cfg(x)
+      #vnlp.cfg(x)
+      Vecchia._primal(vnlp.cfg, x)
     catch
       NaN
     end
@@ -29,7 +31,8 @@ module VecchiaNLPModelsExt
 
   function NLPModels.grad!(vnlp::VecchiaNLPModel{C,T,S}, x, g) where{C,T,S}
     _g = try
-      ForwardDiff.gradient(vnlp.cfg, x)
+      #ForwardDiff.gradient(vnlp.cfg, x)
+      Vecchia._gradient(vnlp.cfg, x)
     catch
       fill(NaN, length(x))
     end
@@ -54,7 +57,8 @@ module VecchiaNLPModelsExt
                                  hvals::AbstractVector{Float64}; 
                                  obj_weight=1) where{C,T,S}
     _h = try
-      ForwardDiff.hessian(vnlp.cfg, x)
+      #ForwardDiff.hessian(vnlp.cfg, x)
+      Vecchia._hessian(vnlp.cfg, x)
     catch
       fill(NaN, (length(x), length(x)))
     end
