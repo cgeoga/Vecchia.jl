@@ -15,7 +15,7 @@ module VecchiaNLPModelsExt
   function Vecchia.nlp(cfg::C, init;
                        box_lower=fill(0.0, length(init)),
                        box_upper=fill(Inf, length(init))) where{C}
-    meta      = NLPModelMeta(length(init); x0=init, lvar=box_lower, uvar=box_upper)
+    meta      = NLPModelMeta(length(init); x0=init, lvar=box_lower, uvar=box_upper, hprod_available=false)
     cache_cfg = Vecchia.adcachewrapper(cfg)
     VecchiaNLPModel(cache_cfg, meta, Counters(), length(init))
   end
