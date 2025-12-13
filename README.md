@@ -1,90 +1,98 @@
 
 # Vecchia.jl
 
-A terse Julia implementation of Vecchia approximations to the Gaussian
-likelihood, which work very well in many settings and run in *linear complexity
-with data size* (assuming O(1) sized conditioning sets). As of now this is only
-implemented for mean-zero processes. Implemented with chunked observations
-instead of singleton observations as in Stein/Chi/Welty 2004 JRSSB [1].
-Reasonably optimized for minimal allocations so that multithreading  really
-works well while still being AD-compatible.  **To my knowledge, this is the only
-program that offers true Hessians of Vecchia likelihoods.** 
+This package offers a flexible and optimized framework for fitting parametric
+Gaussian process models to large datasets using the linear-cost [*Vecchia
+approximation*](https://en.wikipedia.org/wiki/Vecchia_approximation). This
+library offers several features that set it apart from others in the space:
+- Because it is written in Julia, you can provide any covariance function you
+  want (as opposed to being restricted to a list of pre-implemented models)
+- So long as your covariance function is amenable, the approximation is
+  compatible with autodiff and can give you gradients and Hessians without any
+  additional coding on your part (and still with good parallelization!).
+- It is implemented in a way that allows *chunking*, where the fundamental unit
+  in each small likelihood approximation can be a vector of measurements, not
+  just a singleton. 
+- It implements a special EM algorithm-based refinement method for process
+  models with noise.
+- Because of how great the Julia optimization ecosystem is, you can hook into
+  *much* more powerful optimizers than is possible in, for example, R.
 
-The accuracy of Vecchia approximations depends on the *screening effect* [2],
-which can perhaps be considered as a substantially weakened Markovian-like
-property. But the screening effect even for covariance functions that do exhibit
-screening can be significantly weakened by measurement noise (corresponding to a
-"nugget" in the spatial statistics terminology), for example, and so I highly
-recommend investigating whether or not you have reason to expect that your
-specific model exhibits screening to an acceptable degree. In some cases, like
-with measurement noise, there are several workarounds and some are pretty easy
-(including one based on the EM algorithm that this package now offers).  But for
-some covariance functions screening really doesn't hold and so this
-approximation scheme may not perform well. This isn't something that the code
-can enforce, so user discretion is required.
-
-Here is a very quick demo. The only real step here is to create a
-`VecchiaConfig` object, which specifies the point ordering/leaves/conditioning
-sets/and so on. One convenience constructor for doing that is shown here:
+The fundamental object is a `Vecchia.VecchiaConfig`, which specifies your
+conditioning sets for each sub-problem and also acts as a functor with methods
+for the negative log-likelihood. Here is a pseudocode example specifying a
+Vecchia approximation with a random ordering and k nearest neighbor conditioning
+sets.
 ```julia
 using LinearAlgebra, StaticArrays, Vecchia
+using BesselK # provides the AD-compatible Matern model 
 
 # VERY IMPORTANT FOR MULTITHREADING, since this is many small BLAS/LAPACK calls:
 BLAS.set_num_threads(1)
 
-# Covariance function, in this case Matern(v=3/2):
-kfn(x,y,p) = p[1]*exp(-norm(x-y)/p[2])*(1.0+norm(x-y)/p[2])
+# Say you have:
+# pts::Vector{SVector{D,Float64}}, which are the locations of your measurements.
+# data::Matrix{Float64}, where each column is an iid replicate from the process.
 
-# Locations for fake measurements, in this case 2048 of them, and fake data 
-# (data NOT from the correction distribution, this is just a maximally simple demo):
-pts = rand(SVector{2, Float64}, 2048)
-dat = Vecchia.generic_dense_simulate(pts, kfn, (1.0, 0.1, 0.75))
+# The covariance function, in this case Matern. You can provide any function
+# here, but it should have this signature of (location_1, location_2, params).
+kernel(x,y,p) = matern(x,y,p)
 
-# Built-in configuration option 1: random ordering and knn-based conditioning sets.
-# If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
-const cfg = knnconfig(dat, pts, 10, kfn)
+# Pick the number of conditioning points you want to use in each sub-problem.
+# If you want to use a different number for different problems, you can also
+# provide a vector of different values.
+k = 10
 
-# Built-in configuration option 2: a KD-tree based configuration on chunks
-# (as opposed to singletons), as in Stein/Chi/Welty JRSSB 2004.
-# If you have multiple i.i.d. samples, pass in a matrix where each column is a sample.
-chunksize = 10 
-num_conditioning_chunks = 3
-const cfg_chunk = Vecchia.kdtreeconfig(dat, pts, chunksize, num_conditioning_chunks, kfn)
+# There are several options for constructing the configuration object that use
+# different strategies for designing conditioning sets. But in general, I think
+# it's hard to go wrong with this one and would suggest it as a default.
+const cfg = knnconfig(data, pts, k, kernel)
 ```
-But note that you can directly construct the `VecchiaConfig` yourself pretty
-easily. If you have a specific type of configuration you would like to achieve,
-please feel free to open an issue and we can talk about how that is done, or
-submit a PR. I would be very happy to merge in a few other generic constructors
-here, because this chunked KD-tree one is not always the best choice.
-
-For estimation, thanks to Julia's cool weakdep/extension framework, you have a
-few options. My default recommendation is to use
+To keep the base package lean, estimation tools are partially given via
+extensions, meaning that you will have to load other packages for individual
+optimizers and such separately. My default recommendation is to use
 [Uno](https://github.com/cvanaret/uno) with the
 [NLPModels.jl](https://github.com/JuliaSmoothOptimizers/NLPModels.jl) framework.
-Here is a demonstration of fitting your model with `Uno`:
+Here is a demonstration of using that extension framework and fitting your model
+with `Uno`:
 ```julia
-using ForwardDiff, NLPModels # necessary to load the optimizer extension!
-using UnoSolver # or NLPModelsIpopt, or NLPModelsKNITRO, etc
+# Instead of UnoSolver, could also use, e.g., NLPModelsIpopt, or NLPModelsKNITRO.
+using ForwardDiff, NLPModels, UnoSolver # necessary to load extension(s)
 
 solver  = NLPModelsSolver(uno; preset="filtersqp")
 #solver = NLPModelsSolver(ipopt; tol=1e-4) # for Ipopt
 #solver = NLPModelsSolver(knitro; algorithm=4 # for KNITRO
 mle     = vecchia_estimate(cfg, some_init, solver)
 ```
-But feel free to bring your own solver, so long as it implements the `NLPModels`
-framework!
+But feel free to bring your own solver! There are also extensions for the JuMP
+framework. Moreover, `cfg` has methods for the likelihood itself and can be
+treated directly as an objective function, so you can hand it to anything that
+eats a function a returns a minimizer.
 
 **See the example files for heavily commented demonstrations.**
 
-The code is organized with modularity and user-specific applications in mind, so
-the primary way to interact with the approximation is to create a
-`VecchiaConfig` object that specifies the chunks and conditioning sets for each
-chunk. The only provided one is a very basic option that orders the points with
-a KD-tree with a specified terminal leaf size (so that each leaf is a chunk),
-re-orders those chunks based on the leaf centers, and then picks conditioning
-sets based on the user-provided size. 
+# Additional functionality
 
-# Advanced Usage
+## Sparse precision matrix and ("reverse") Cholesky factors
+
+While it is not necessary for evaluating the negative log-likelihood, in some
+settings it can be useful to use this approximation to produce a sparse
+approximation to the model-implied precision matrix. For this purpose,
+`rchol(cfg, params)` gives a sparse Upper triangular matrix `U` (the "reverse"
+Cholesky factor) such that your precision is approximated with `U*U'`.  **Note
+that these objects correspond to permuted data, though, not the ordering in
+which you provided the data**.
+```julia
+using SparseArrays 
+
+# Note that the direct output of Vecchia.rchol is an internal object with just
+# a few methods. But this sparse conversion will give you a good old SparseMatrixCSC.
+U = UpperTriangular(sparse(Vecchia.rchol(vecc, sample_p)))
+```
+You'll get a warning the first time you call `rchol` re-iterating the issue
+about permutations. If you want to avoid that, you can pass in the kwarg
+`issue_warning=false`.
+
 
 ## Estimation with a nugget/measurement error
 
@@ -104,38 +112,7 @@ methods that you need to provide that struct for everything to "just work".
 
 **If you use this method, please cite [this paper](https://arxiv.org/abs/2208.06877)**.
 
-## Sparse precision matrix and ("reverse") Cholesky factors
-
-While it will almost always be faster to just evaluated the likelihood with
-`Vecchia.nll(cfg, params)`, you *can* actually obtain the precision matrix `S`
-such that `Vecchia.nll(cfg, params) == -logdet(S) + dot(data, S, data)`. You can
-*also* obtain the upper triangular matrix `U` such that `S = U*U'`. **Note that
-these objects correspond to permuted data, though, not the ordering in which you
-provided the data**. 
-
-While this package originally offered both, the direct assembly of `U` is much
-simpler and in order to streamline this code I have removed the option to
-directly assemble `S` that used the different algorithm of Sun and Stein (2016). 
-
-Here is an example usage:
-```julia
-# Note that this is NOT given in the form of a sparse matrix, it is a custom
-# struct with just two methods: U'*x and logdet(U), which is all you need to
-# evaluate the likelihood. 
-U = Vecchia.rchol(vecc, sample_p)
-
-# If you want the sparse matrix (don't forget to wrap as UpperTriangular!):
-U_SparseMatrixCSC = UpperTriangular(sparse(U))
-
-# If you want S back, for example:
-S = U_SparseMatrixCSC*U_SparseMatrixCSC'
-
-# Here is how I'd recommend getting your data in the correct permutation out:
-data_perm = reduce(vcat, vecc.data)
-```
-You'll get a warning the first time you call `rchol` re-iterating the issue
-about permutations. If you want to avoid that, you can pass in the kwarg
-`issue_warning=false`.
+# Advanced usage
 
 ## Expensive or Complicated Kernel Functions
 
@@ -253,8 +230,3 @@ second-order optimization with the real Hessians**,  please cite the package its
 I would also be curious to see/hear about your application if you're willing to
 share it or take the time to tell me about it. 
 
-# References
-
-[1] https://rss.onlinelibrary.wiley.com/doi/abs/10.1046/j.1369-7412.2003.05512.x
-
-[2] https://arxiv.org/pdf/1203.1801.pdf
