@@ -1,7 +1,7 @@
 
 module Vecchia
 
-  using Printf, Random, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays, HNSW, Accessors, Distances
+  using Printf, Random, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays, HNSW, Distances
 
   export nll, vecchia_estimate, vecchia_estimate_nugget, knnconfig, rchol, NLPModelsSolver
 
