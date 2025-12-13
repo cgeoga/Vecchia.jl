@@ -48,7 +48,9 @@ k = 10
 # There are several options for constructing the configuration object that use
 # different strategies for designing conditioning sets. But in general, I think
 # it's hard to go wrong with this one and would suggest it as a default.
-const cfg = knnconfig(data, pts, k, kernel)
+const cfg = knnconfig(data, pts, k, kernel;
+                      randomize=false, # recommend true for lattice data
+                      metric=Vecchia.Euclidean()) # use Haversine if data on a sphere!
 ```
 To keep the base package lean, estimation tools are partially given via
 extensions, meaning that you will have to load other packages for individual
