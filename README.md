@@ -7,9 +7,11 @@ approximation*](https://en.wikipedia.org/wiki/Vecchia_approximation). This
 library offers several features that set it apart from others in the space:
 - Because it is written in Julia, you can provide any covariance function you
   want (as opposed to being restricted to a list of pre-implemented models)
-- So long as your covariance function is amenable, the approximation is
-  compatible with autodiff and can give you gradients and Hessians without any
-  additional coding on your part (and still with good parallelization!).
+- If autodiff works on your kernel function, it will work for the approximation
+  (and have good parallel performance for gradients and Hessians!). See
+  [BesselK.jl](https://github.com/cgeoga/BesselK.jl) for a
+  `ForwardDiff.jl`-compatible Matern function, *including* the smoothness
+  parameter.
 - It is implemented in a way that allows *chunking*, where the fundamental unit
   in each small likelihood approximation can be a vector of measurements, not
   just a singleton. 
@@ -21,7 +23,7 @@ library offers several features that set it apart from others in the space:
 The fundamental object is a `Vecchia.VecchiaConfig`, which specifies your
 conditioning sets for each sub-problem and also acts as a functor with methods
 for the negative log-likelihood. Here is a pseudocode example specifying a
-Vecchia approximation with a random ordering and k nearest neighbor conditioning
+Vecchia approximation with a random ordering and knn conditioning
 sets.
 ```julia
 using LinearAlgebra, StaticArrays, Vecchia
@@ -87,7 +89,7 @@ using SparseArrays
 
 # Note that the direct output of Vecchia.rchol is an internal object with just
 # a few methods. But this sparse conversion will give you a good old SparseMatrixCSC.
-U = UpperTriangular(sparse(Vecchia.rchol(vecc, sample_p)))
+U = UpperTriangular(sparse(Vecchia.rchol(cfg, sample_p)))
 ```
 You'll get a warning the first time you call `rchol` re-iterating the issue
 about permutations. If you want to avoid that, you can pass in the kwarg
