@@ -100,6 +100,22 @@ function rchol_instantiate!(strbuf::RCholesky, V::VecchiaConfig{H,D,F},
   nothing
 end
 
+"""
+`rchol(cfg::VecchiaConfig, params; issue_warning=true, use_tiles=false)`
+
+A method for assembling an upper-triangular matrix `U` that gives a sparse "reverse" Cholesky factor for your precision matrix. In particular, if
+```
+data = reduce(vcat, cfg.data) # to be sure of the permutations matching
+```
+and `S =`Var(`data[:,1]`), then `inv(S) ≈ U*U'`, where
+```
+U = UpperTriangular(sparse(rchol(cfg, params))).
+```
+
+Optional keyword arguments are:
+- `issue_warning`, where a value of `false` will silence the warning about using the correct permutation, and
+- `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models with many redundant kernel evaluations.
+"""
 function rchol(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}; 
                issue_warning=true, use_tiles=false) where{H,D,F,T}
   if issue_warning

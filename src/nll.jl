@@ -17,6 +17,11 @@ function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
   (out_logdet, out_qforms)
 end
 
+"""
+`nll(cfg::VecchiaConfig, params)`
+
+Returns the negative log-likelihood of parameters `params` under the approximation specified by `cfg`.
+"""
 function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   checkthreads()
   Z      = promote_type(H,T)

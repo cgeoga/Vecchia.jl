@@ -6,7 +6,7 @@ Gaussian process models to large datasets using the linear-cost [*Vecchia
 approximation*](https://en.wikipedia.org/wiki/Vecchia_approximation). This
 library offers several features that set it apart from others in the space:
 - Because it is written in Julia, you can provide any covariance function you
-  want (as opposed to being restricted to a list of pre-implemented models)
+  want (as opposed to being restricted to a list of pre-implemented models).
 - If autodiff works on your kernel function, it will work for the approximation
   (and have good parallel performance for gradients and Hessians!). See
   [BesselK.jl](https://github.com/cgeoga/BesselK.jl) for a

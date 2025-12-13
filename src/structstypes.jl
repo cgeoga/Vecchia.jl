@@ -8,6 +8,17 @@ struct NLPModelsSolver{S,T}
   opts::Dict{Symbol, T}
 end
 
+"""
+`NLPModelsSolver(s; opts...)`
+
+A thin wrapper for representing a solver object that accepts a `NLPModel` object. None are provided in the base of this package, but by loading the extensions (see the README or example files) one can bring them into scope. For example, to fit a model with Ipopt with a fixed number of iterations and a lower tolerance than default, one would do this:
+```
+using ForwardDiff, NLPModels, NLPModelsIpopt
+
+solver = NLPModelsSolver(ipopt; :max_iter=>100, :tol=>1e-4)
+mle    = vecchia_estimate(cfg, init, solver)
+```
+"""
 NLPModelsSolver(s::S; kwargs...) where{S} = NLPModelsSolver(s, Dict(kwargs))
 
 function nlp end
@@ -29,10 +40,22 @@ TRBSolver(;verbose::Bool=true) = TRBSolver(verbose ? 1 : 0)
 
 function optimize end
 
+"""
+`vecchia_estimate(cfg::VecchiaConfig, init, solver; kwargs...)`
+
+Find the MLE under the Vecchia approximation specified by `cfg`. Initialization is provided by `init`, and the optimizer is specified by `solver`. See the README or example files for examples of solvers. **NOTE:** you will need to `using` some additional packages to load the extensions that give this function useful methods.
+"""
+function vecchia_estimate end
+
 function vecchia_estimate(cfg, init, solver; kwargs...)
   optimize(cfg, init, solver; kwargs...)
 end
 
+"""
+`vecchia_estimate_nugget(cfg::VecchiaConfig, init, solver, errormodel; kwargs...)`
+
+Find the MLE under the Vecchia approximation specified by `cfg`. Initialization is provided by `init`, and the optimizer is specified by `solver`. In this case of measurement noise, however, the estimator is refined with an EM algorithm approach. See the example file for a detailed demonstration.
+"""
 function vecchia_estimate_nugget(cfg, init, solver, errormodel; kwargs...)
   nugkernel = Vecchia.ErrorKernel(cfg.kernel, errormodel)
   nugcfg    = Vecchia.VecchiaConfig(nugkernel, cfg.data, cfg.pts, cfg.condix)
@@ -206,18 +229,37 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   VecchiaConfig{H,D,F}(kfun, dat_out, pts_out, condix)
 end
 
-function knnconfig(data, pts, blockranks, kfun; 
+"""
+`knnconfig(data::Matrix{Float64}, pts::Vector{SVector{D,Float64}}, k::Union{Int64, Vector{Int64}}, kernel::Function; randomize::Bool=false, metric=Distances.Euclidean())`
+
+A method for producing a `VecchiaConfig`, which fully specifies a Vecchia
+approximation and implements highly optimized methods for evaluating the 
+negative log-likelihood. Arguments are:
+
+- `data`: a matrix where each **column** represents an iid copy of the GP you are modeling.
+- `pts`: a vector where each entry `pts[j]` gives the location at `data[j,:]` was measured.
+- `k`: a single `Int` or `Vector{Int}` specifying the number of conditioning points to use for each prediction problem.
+- `kernel`: your covariance function. **NOTE:**  this function can be arbitrary, but it *must* have the method `kernel(x::SVector{D,Float64}, y::SVector{D,Float64}, params)`.
+
+Optional kwargs are:
+
+- `randomize`: whether to randomly shuffle the order of your points. For lattice data, this is recommended for improved accuracy.
+- ` metric`: the metric used for determining nearest neighbors. You probably won't have to touch this unless you are on a sphere, in which case you should pass in `Vecchia.Haversine()` instead.
+"""
+function knnconfig end
+
+function knnconfig(data, pts, kv, kfun; 
                    randomize=false, metric=Euclidean())
   if randomize
     p = Random.randperm(length(pts))
-    return knnconfig(data[p,:], pts[p], blockranks[p], kfun; randomize=false)
+    return knnconfig(data[p,:], pts[p], kv[p], kfun; randomize=false)
   end
   condix = [Int64[]]
   tree   = HierarchicalNSW(pts; metric=metric)
   for j in 2:length(pts)
     add_to_graph!(tree, [j-1])
     ptj  = pts[j]
-    idxs = Int64.(knn_search(tree, pts[j], min(j-1, blockranks[j]))[1])
+    idxs = Int64.(knn_search(tree, pts[j], min(j-1, kv[j]))[1])
     push!(condix, sort(idxs))
   end
   pts = [[x] for x in pts]
