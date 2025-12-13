@@ -116,107 +116,18 @@ methods that you need to provide that struct for everything to "just work".
 
 **If you use this method, please cite [this paper](https://arxiv.org/abs/2208.06877)**.
 
-# Advanced usage
+# Roadmap to 1.0:
 
-## Expensive or Complicated Kernel Functions
-
-`Vecchia.jl` is pretty judicious about when and where the covariance function is
-evaluated. For sufficiently fancy kernels that involve a lot of
-side-computations or carrying around additional objects, there might be some
-performance to be gained by "specializing" the internal function
-`Vecchia.updatebuf!`, which is the only place where the kernel function is
-called. Here is an example of this syntax:
-```julia
-
-# Create some struct to carry around all of your extra pieces that, for example,
-# would otherwise need to be computed redundantly.
-struct MyExpensiveKernel
-  # ... 
-end
-
-# Now write a special method of Vecchia.updatebuf!. This might technically be
-# type piracy, but I won't tell anybody if you won't.
-#
-# Note that you could also instead do fn::typeof(myspecificfunction) if you just
-# wanted a special method for one specific function instead of a struct.
-function Vecchia.updatebuf!(buf, pts1, pts2, fn::MyExpensiveKernel,
-                            params; skipltri=false)
-  println("Wow, neat!") 
-  # ... (now do things to update buf)
-end
-
-# Create Vecchia config object:
-const my_vecc_config = Vecchia.kdtreeconfig(..., MyExpensiveKernel(...))
-
-# Now when you call this function, you will see "Wow, neat!" pop up every time
-# that Vecchia.updatebuf! gets called. Once you're done testing and want to
-# actually go fast, I would obviously recommend getting rid of the print
-# statement.
-Vecchia.nll(my_vecc_config, params)
-```
-In general, this probably won't be necessary for you. But I know I for one work
-with some pretty exotic kernels regularly. And from experience I can attest
-that, with some creativity, you can really cram a lot of efficient complexity
-into the approximation with this approach without having to develop any new
-boilerplate.
-
-## Mean functions
-
-...are currently not super officially supported. But you can now pass AD through
-the `VecchiaConfig` struct itself. So a very simple hacky way to get your mean
-function going would be a code pattern like
-```julia
-# see other examples for the rest of the args to the kdtreeconfig and stuff.
-function my_nonzeromean_nll(params, ...)
-  parametric_mean = mean_function(params, ...) 
-  cfg = Vecchia.kdtreeconfig(data - parametric_mean, ...) 
-  Vecchia.nll(cfg, params)
-end
-```
-This will of course mean you rebuild the `VecchiaConfig` every time you evaluate
-the likelihood, which isn't ideal and is why I say that mean functions aren't
-really in this package yet. But then, at least the generic KD-tree configs get
-built pretty quickly, and so if you have enough data that Vecchia approximations
-are actually helpful, you probably won't feel it too much. And now you can just
-do `ForwardDiff.{gradient, hessian}(my_nonzeromean_nll, params)` without any
-additional code. If you wanted to fit billions of points, this probably isn't
-taking the problem seriously enough. But until your data sizes get there, this
-slight inefficiency probably won't be the bottleneck either.
-
-I'm very open to feedback/comments/suggestions on the best way to incorporate
-mean functions. It just isn't obvious to me how best to do it, and I don't
-really need them myself (at least, not beyond what I can do with this current
-pattern) so I'm not feeling super motivated to think hard about the best design
-choice.
-
-# Wanted/planned changes (contributions welcome!)
-
-- More docstrings!
-- It might be nice to add a new `ScalarVecchiaConfig` or something similar for
-  cases where the prediction sets are singletons. The `VecchiaConfig` object has
-  a bit of extra indirection that is necessary for chunked prediction sets.
-  But maybe with a little reworking something simpler could be given in the
-  scalar case.
-- Conditional simulations were recently added, but that implementation would
-  hugely benefit from somebody kicking the tires and playing with details and
-  smart defaults/guardrails.
-- Prediction design is pretty hacky at this point. A more careful look at the
-  literature in this space and a better design would be good.
-- It would be interesting to at some point benchmark the potential improvement
-  from using memoization for kernel evaluations (with a potential extra twist of
-  memoizing over stationary kernel evaluations as well). In the rchol approach,
-  there is the `use_tiles={true,false}` kwarg, which effectively does manual
-  book-keeping to avoid ever evaluating the kernel for the same pair of points
-  twice. But it may be more elegant and just as fast to use memoization. This is
-  probably 10-20 lines of code and an hour to benchmark and play with, so it would
-  be a great first way to tinker with Vecchia stuff.
-- API refinement/seeking feedback. For the most part, it is me and students in
-  my orbit that use this package. But I'd love for it to be more widely adopted,
-  and so I'd love for the interface to be polished. For example: figuring out
-  how best to more properly support mean functions would be nice. Another
-  example: I've just put a bunch of print warnings in the code about permutation
-  footguns. But obviously it would be better to just somehow design the
-  interface that there is no chance of a user getting mixed up by that.
+- More thoughtful interfaces for:
+    - Mean functions.
+    - A `VecchiaConfig` constructor where conditioning set design is more
+      modular, and possibly also amenable to extensions. Perhaps `HNSW` could
+      move from a dep to an extension, and also a Hilbert curve extension could
+      be supported for banded approximation.
+    - Predictions and conditional simulation. Right now, there is a
+      `PredictionConfig` that is implemented, but it needs much more testing and
+      design TLC.
+- A careful investigation into memoization or similar approaches to speed up
 
 # Citation
 
