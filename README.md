@@ -119,6 +119,10 @@ methods that you need to provide that struct for everything to "just work".
 # Roadmap to 1.0:
 
 - More thoughtful interfaces for:
+    - How internal permutations are handled. It would probably be best to
+      abstract that away from the user, but it would also be nice for the sparse
+      `rchol` construction to give back an `UpperTriangular` so that fast
+      backsolves didn't require any additional factorization or anything.
     - Mean functions.
     - A `VecchiaConfig` constructor where conditioning set design is more
       modular, and possibly also amenable to extensions. Perhaps `HNSW` could
