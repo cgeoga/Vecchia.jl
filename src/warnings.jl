@@ -21,7 +21,7 @@ const BOUNDS_WARN = "This function defaults to lower bounds on parameters of 1e-
 
 const RCHOL_INSTANTIATE_ERROR = "This instantiation function makes extensive use of in-place algebraic operations and makes certain assumptions about the values of those buffers coming in. Please make a new struct to pass in here, or manually reset your current one."
 
-const RCHOL_WARN = "Note that this is the reverse Cholesky factor for your data enumerated according to the permutation of the VecchiaConfig structure, so if you plan to apply this to vectors be sure to be mindful of potentially re-permuting. The simplest way to permute your data correct is with reduce(vcat, my_config.data)."
+const RCHOL_WARN = "Note that this is the reverse Cholesky factor for your data enumerated according to the permutation of the VecchiaApproximation structure, so if you plan to apply this to vectors be sure to be mindful of potentially re-permuting. The simplest way to permute your data correct is with reduce(vcat, my_config.data)."
 
 const EM_NONUG_WARN = "Your perturbation/error variance is zero, which violates the requirement that its covariance matrix be invertible. Perhaps you could get away with modeling without the nugget effect after all? Alternatively, check your code for the covariance function perhaps."
 

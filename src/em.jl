@@ -75,7 +75,7 @@ function (k::ErrorKernel{K})(x, y, p) where{K}
 end
 
 struct ExpectedJointNll{H,D,F,R} <: Function
-  cfg::VecchiaConfig{H,D,F}
+  cfg::VecchiaApproximation{H,D,F}
   errormodel::R
   data_minus_z0::Matrix{Float64}
   presolved_saa::Matrix{Float64}
@@ -107,7 +107,7 @@ end
 # TODO (cg 2023/01/20 14:26): Write the non-symmetrized version of this that
 # only requires a more generic solve(R, v) interface.
 """
-prepare_z0_SR0(cfg::VecchiaConfig, arg::AbstractVector) -> (z0, SR0)
+prepare_z0_SR0(cfg::VecchiaApproximation, arg::AbstractVector) -> (z0, SR0)
 
 Compute E [z | y] to use in the E function.
 """
@@ -120,12 +120,12 @@ function prepare_z0_SR0(cfg, arg, data, errormodel)
   (SRf\(Rinv*data), SRf)
 end
 
-function augmented_em_cfg(V::VecchiaConfig{H,D,F}, z0, presolved_saa) where{H,D,F}
+function augmented_em_cfg(V::VecchiaApproximation{H,D,F}, z0, presolved_saa) where{H,D,F}
   chunksix = chunk_indices(V.pts)
   new_data = map(chunksix) do ixj
     hcat(z0[ixj,:], presolved_saa[ixj,:])
   end
-  Vecchia.VecchiaConfig{H,D,F}(V.kernel, new_data, V.pts, V.condix)
+  Vecchia.VecchiaApproximation{H,D,F}(V.kernel, new_data, V.pts, V.condix)
 end
 
 function em_step(cfg, arg, saa, errormodel, solver, box_lower, box_upper)
@@ -156,18 +156,18 @@ function em_step(cfg, arg, saa, errormodel, solver, box_lower, box_upper)
 end
 
 """
-`vecchia_estimate_nugget(cfg::VecchiaConfig, init, solver, errormodel; kwargs...)`
+`vecchia_estimate_nugget(cfg::VecchiaApproximation, init, solver, errormodel; kwargs...)`
 
 Find the MLE under the Vecchia approximation specified by `cfg`. Initialization is provided by `init`, and the optimizer is specified by `solver`. In this case of measurement noise, however, the estimator is refined with an EM algorithm approach. See the example file for a detailed demonstration.
 """
 function vecchia_estimate_nugget(cfg, init, solver, errormodel; kwargs...)
   nugkernel = Vecchia.ErrorKernel(cfg.kernel, errormodel)
-  nugcfg    = Vecchia.VecchiaConfig(nugkernel, cfg.data, cfg.pts, cfg.condix)
+  nugcfg    = Vecchia.VecchiaApproximation(nugkernel, cfg.data, cfg.pts, cfg.condix)
   vecchia_estimate(nugcfg, init, solver; kwargs...)
 end
 
 struct EMVecchiaIterable{H,D,F,O,R}
-  cfg::VecchiaConfig{H,D,F}
+  cfg::VecchiaApproximation{H,D,F}
   step_new::Vector{Float64}
   step_old::Vector{Float64}
   saa::Matrix{Float64}

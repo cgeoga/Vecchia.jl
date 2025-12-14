@@ -29,14 +29,14 @@ function kdtreeconfig(data, pts, chunksize, blockrank, kfun)
   # Create the conditioning meta-indices for the chunks.
   condix  = [collect(max(1, (j-blockrank)):(j-1)) for j in eachindex(pts_out)]
   (H,D,F) = (eltype(data), length(first(pts)), typeof(kfun))
-  VecchiaConfig{H,D,F}(kfun, dat_out, pts_out, condix)
+  VecchiaApproximation{H,D,F}(kfun, dat_out, pts_out, condix)
 end
 =#
 
 """
 `knnconfig(data::Matrix{Float64}, pts::Vector{SVector{D,Float64}}, k::Union{Int64, Vector{Int64}}, kernel::Function; randomize::Bool=false, metric=Distances.Euclidean())`
 
-A method for producing a `VecchiaConfig`, which fully specifies a Vecchia
+A method for producing a `VecchiaApproximation`, which fully specifies a Vecchia
 approximation and implements highly optimized methods for evaluating the 
 negative log-likelihood. Arguments are:
 
@@ -68,7 +68,7 @@ function knnconfig(data, pts, kv, kfun;
   end
   pts = [[x] for x in pts]
   dat = collect.(permutedims.(eachrow(data)))
-  VecchiaConfig(kfun, dat, pts, condix)
+  VecchiaApproximation(kfun, dat, pts, condix)
 end
 
 function knnconfig(data, pts, m::Int64, kfun; randomize=false, metric=Euclidean())
@@ -83,7 +83,7 @@ function knnconfig(data, pts::Vector{SVector{1,Float64}}, mv::AbstractVector{Int
   _pts  = _pts[sp]
   _data = data[sp,:]
   cix   = [collect(max(1, j-mv[j]):(j-1)) for j in 1:length(pts)]
-  VecchiaConfig(kfun, hcat.(eachrow(_data)), [[SA[x]] for x in _pts], cix)
+  VecchiaApproximation(kfun, hcat.(eachrow(_data)), [[SA[x]] for x in _pts], cix)
 end
 
 function knnconfig(data, pts::Vector{SVector{1,Float64}}, m::Int, kfun; 
@@ -134,7 +134,7 @@ function maximinconfig(::Val{D}, data, ptsm::Matrix{Float64},
   condix = supernodes_to_condix(size(ptsm, 2), sn)
   _data  = data[P,:]
   _pts   = SVector{D,Float64}.(eachcol(ptsm[:,P]))
-  VecchiaConfig(kernel, hcat.(eachrow(_data)), [[x] for x in _pts], condix)
+  VecchiaApproximation(kernel, hcat.(eachrow(_data)), [[x] for x in _pts], condix)
 end
 
 function maximinconfig(data, pts::Vector{SVector{D,Float64}}, 

@@ -1,6 +1,6 @@
 
 """
-`PredictionConfig(cfg::VecchiaConfig, pred_pts, ncondition; [fixed_use_indices=nothing, separable=false])`
+`PredictionConfig(cfg::VecchiaApproximation, pred_pts, ncondition; [fixed_use_indices=nothing, separable=false])`
 
 A structure representing a Vecchia-accelerated prediction problem. Internally, conditioning
 data and its conditioning set (from `cfg`) are joined with the new prediction points, which 
@@ -8,7 +8,7 @@ are put at the end so that there is the greatest pool of conditioning points to 
 
 ARGUMENTS:
 
-- `cfg::VecchiaConfig`: the base `VecchiaConfig` object specifying the data you have and the conditioning sets for each measurement.
+- `cfg::VecchiaApproximation`: the base `VecchiaApproximation` object specifying the data you have and the conditioning sets for each measurement.
 
 - `pred_pts`: a vector of points (either `Vector{SVector{D,Float64}}` or `Vector{Float64}`) to predict at.
 
@@ -28,7 +28,7 @@ struct PredictionConfig{D,F}
   separable::Bool
 end
 
-function PredictionConfig(cfg::VecchiaConfig{H,D,F}, pred_pts::Vector{SVector{D,Float64}},
+function PredictionConfig(cfg::VecchiaApproximation{H,D,F}, pred_pts::Vector{SVector{D,Float64}},
                           ncondition; fixed_use_indices=nothing, 
                           skip_indices=Int64[], separable=false) where{H,D,F}
   check_singleton_sets(cfg)
@@ -53,7 +53,7 @@ function PredictionConfig(cfg::VecchiaConfig{H,D,F}, pred_pts::Vector{SVector{D,
   PredictionConfig(cfg.kernel, jpts, data, condix, separable)
 end
 
-function PredictionConfig(cfg::VecchiaConfig{H,1,F}, pred_pts::Vector{Float64},
+function PredictionConfig(cfg::VecchiaApproximation{H,1,F}, pred_pts::Vector{Float64},
                           ncondition; fixed_use_indices=nothing, separable=false) where{H,F}
   PredictionConfig(cfg, [SA[x] for x in pred_pts], ncondition;
                    fixed_use_indices=fixed_use_indices, separable=separable)
@@ -63,7 +63,7 @@ function jointconfig(pcfg::PredictionConfig{D,F}) where{D,F}
   (n, m) = (size(pcfg.data, 1), length(pcfg.pts) - size(pcfg.data, 1))
   _data  = hcat.(eachrow(pcfg.data))
   _pts   = [[x] for x in pcfg.pts]
-  jcfg   = VecchiaConfig(pcfg.kernel, _data, _pts, pcfg.condix)
+  jcfg   = VecchiaApproximation(pcfg.kernel, _data, _pts, pcfg.condix)
   (n, m, jcfg)
 end
 

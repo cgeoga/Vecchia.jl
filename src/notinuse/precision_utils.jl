@@ -144,7 +144,7 @@ function globalidxs(datavv)
   out
 end
 
-function checksorted(V::VecchiaConfig{D,F}) where{D,F}
+function checksorted(V::VecchiaApproximation{D,F}) where{D,F}
   all(issorted, V.condix) || throw(error("This function requires that every conditioning vector be sorted."))
   nothing
 end

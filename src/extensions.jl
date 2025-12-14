@@ -32,7 +32,7 @@ function _hessian       end
 function optimize end
 
 """
-`vecchia_estimate(cfg::VecchiaConfig, init, solver; kwargs...)`
+`vecchia_estimate(cfg::VecchiaApproximation, init, solver; kwargs...)`
 
 Find the MLE under the Vecchia approximation specified by `cfg`. Initialization is provided by `init`, and the optimizer is specified by `solver`. See the README or example files for examples of solvers. **NOTE:** you will need to `using` some additional packages to load the extensions that give this function useful methods.
 """

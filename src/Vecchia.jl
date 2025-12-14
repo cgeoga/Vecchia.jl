@@ -3,12 +3,12 @@ module Vecchia
 
   using Printf, Random, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays, HNSW, Distances
 
-  export vecchia_estimate, vecchia_estimate_nugget, knnconfig, rchol, NLPModelsSolver
+  export VecchiaApproximation, vecchia_estimate, vecchia_estimate_nugget, knnconfig, rchol, NLPModelsSolver
 
   include("warnings.jl")
 
   include("vecchia_config.jl")
-  export VecchiaConfig
+  export VecchiaApproximation
 
   include("utils.jl")
 

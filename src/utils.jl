@@ -23,10 +23,10 @@ end
 # such that x_sorted[p] == x_init.
 inner_to_outer_perm(x_init, x_sorted) = invperm(outer_to_inner_perm(x_init, x_sorted))
 
-blockrank(cfg::VecchiaConfig) = maximum(length, cfg.condix)
-chunksize(cfg::VecchiaConfig) = maximum(length, cfg.pts)
+blockrank(cfg::VecchiaApproximation) = maximum(length, cfg.condix)
+chunksize(cfg::VecchiaApproximation) = maximum(length, cfg.pts)
 
-function check_singleton_sets(cfg::VecchiaConfig)
+function check_singleton_sets(cfg::VecchiaApproximation)
   if chunksize(cfg) > 1
     throw(error("This method is only implemented for singleton prediction sets. Please open an issue if there is missing functionality you need."))
   end

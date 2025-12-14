@@ -54,7 +54,7 @@ function build_tiles(pts, condix, kernel::F, p, ::Val{H}) where{F,H}
   update_tile_buffers!(tiles, pts, kernel, req_pairs, p)
 end
 
-function build_tiles(cfg::VecchiaConfig{H,D,F}, p, ::Val{Z}) where{H,D,F,Z}
+function build_tiles(cfg::VecchiaApproximation{H,D,F}, p, ::Val{Z}) where{H,D,F,Z}
   build_tiles(cfg.pts, cfg.condix, cfg.kernel, p, Val(Z))
 end
 

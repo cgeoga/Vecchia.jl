@@ -19,7 +19,7 @@ function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
 end
 
 struct VecchiaLikelihoodPiece{H,D,F,T}
-  cfg::VecchiaConfig{H,D,F}
+  cfg::VecchiaApproximation{H,D,F}
   buf::CondLogLikBuf{D,T}
   ixrange::UnitRange{Int64}
 end
@@ -56,7 +56,7 @@ function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
   (out_logdet, out_qforms)
 end
 
-function split_nll_pieces(V::VecchiaConfig{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
+function split_nll_pieces(V::VecchiaApproximation{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
   ndata   = size(first(V.data), 2)
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
@@ -68,11 +68,11 @@ function split_nll_pieces(V::VecchiaConfig{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
 end
 
 """
-`nll(cfg::VecchiaConfig, params)`
+`nll(cfg::VecchiaApproximation, params)`
 
 Returns the negative log-likelihood of parameters `params` under the approximation specified by `cfg`.
 """
-function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
+function nll(V::VecchiaApproximation{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   checkthreads()
   Z      = promote_type(H,T)
   ndata  = size(first(V.data), 2)
@@ -81,7 +81,7 @@ function nll(V::VecchiaConfig{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
   (logdets*ndata + qforms)/2
 end
 
-(V::VecchiaConfig{H,D,F})(p) where{H,D,F} = nll(V, p)
+(V::VecchiaApproximation{H,D,F})(p) where{H,D,F} = nll(V, p)
 
 function _nll(pieces::Vector{VecchiaLikelihoodPiece{H,D,F,T}}, 
               params) where{H,D,F,T}
@@ -98,7 +98,7 @@ function _nll(pieces::Vector{VecchiaLikelihoodPiece{H,D,F,T}},
   (sum(logdets), sum(qforms))
 end
 
-function cnll_str(V::VecchiaConfig{H,D,F}, j::Int, 
+function cnll_str(V::VecchiaApproximation{H,D,F}, j::Int, 
                   strbuf::CondLogLikBuf{D,T}, params) where{H,D,F,T}
   # prepare the marginal points and buffer:
   pts    = V.pts[j]

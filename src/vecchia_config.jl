@@ -1,12 +1,12 @@
 
-struct VecchiaConfig{H,D,F}
+struct VecchiaApproximation{H,D,F}
   kernel::F
   data::Vector{Matrix{H}}
   pts::Vector{Vector{SVector{D, Float64}}}
   condix::Vector{Vector{Int64}} 
 end
 
-function Base.display(V::VecchiaConfig)
+function Base.display(V::VecchiaApproximation)
   println("Vecchia configuration with:")
   println("  - chunksize:  $(chunksize(V))")
   println("  - block rank: $(blockrank(V))")
