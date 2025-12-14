@@ -1,4 +1,9 @@
 
+#
+# This file defines dummy objects or functions that will be given meaningful
+# methods and operations through extensions.
+#
+
 struct NLPModelsSolver{S,T}
   solver::S
   opts::Dict{Symbol, T}
