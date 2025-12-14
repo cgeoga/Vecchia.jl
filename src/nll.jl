@@ -1,4 +1,43 @@
 
+struct CondLogLikBuf{D,T}
+  buf_pp::Matrix{T}
+  buf_cp::Matrix{T}
+  buf_cc::Matrix{T}
+  buf_cdat::Matrix{T}
+  buf_mdat::Matrix{T}
+  buf_cpts::Vector{SVector{D,Float64}}
+end
+
+function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
+  buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
+  buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
+  buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
+  buf_cdat = Array{Z}(undef, cpts_sz, ndata)
+  buf_mdat = Array{Z}(undef,  pts_sz, ndata)
+  buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
+  CondLogLikBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
+end
+
+struct VecchiaLikelihoodPiece{H,D,F,T}
+  cfg::VecchiaConfig{H,D,F}
+  buf::CondLogLikBuf{D,T}
+  ixrange::UnitRange{Int64}
+end
+
+# TODO (cg 2025/12/14 15:26): the piece evaluation framework here was formulated
+# to try and faciliate parallel reverse-mode differentiation because each of the
+# pieces would yield a single-threaded routine to make a ReverseDiff tape for.
+# But it's been years and I haven't done that yet, so it's probably time.
+struct PieceEvaluation{H,D,F,T} <: Function
+  piece::VecchiaLikelihoodPiece{H,D,F,T}
+end
+
+function (c::PieceEvaluation{H,D,F,T})(p) where{H,D,F,T}
+  (logdets, qforms) = c.piece(p)
+  ndata = size(first(c.piece.cfg.data), 2)
+  (ndata*logdets + qforms)/2
+end
+
 function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T}
   ldiv!(adjoint(U), y_mut_allowed)
   (2*logdet(U), sum(_square, y_mut_allowed))
@@ -15,6 +54,17 @@ function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
     out_qforms += qfj
   end
   (out_logdet, out_qforms)
+end
+
+function split_nll_pieces(V::VecchiaConfig{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
+  ndata   = size(first(V.data), 2)
+  cpts_sz = chunksize(V)*blockrank(V)
+  pts_sz  = chunksize(V)
+  chunks  = Iterators.partition(eachindex(V.pts), cld(length(V.pts), m))
+  map(chunks) do chunk
+    local_buf = cnllbuf(Val(D), Val(Z), ndata, cpts_sz, pts_sz)
+    VecchiaLikelihoodPiece(V, local_buf, chunk)
+  end
 end
 
 """

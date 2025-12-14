@@ -3,10 +3,6 @@ using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia, SparseArrays
 
 BLAS.set_num_threads(1)
 
-# TODO (cg 2022/12/23 15:18): 
-# 1) Any EM tests
-# 2) Any sqp/tr tests
-
 function exact_nll(cfg, p)
   pts = reduce(vcat, cfg.pts)
   dat = reduce(vcat, cfg.data)
@@ -25,9 +21,9 @@ sim    = randn(rng, length(pts))
 
 # Create a vecc object that uses enough block-conditioning points that the
 # likelihood evaluation is exact.
-vecc1      = Vecchia.kdtreeconfig(sim, pts, 5, 3, kernel)
 vecc2      = knnconfig(sim, pts, 10, kernel)
-vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
+vecc_exact = knnconfig(sim, pts, 10000000, kernel)
+#vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
 
 # Test 1: nll gives the exact likelihood for a vecchia config where the
 # conditioning set is every prior point.
@@ -41,23 +37,28 @@ end
 # single-data nlls.
 @testset "multiple data nll" begin
 new_data  = range(0.0, 1.0, length=length(sim))
-joint_cfg = Vecchia.kdtreeconfig(hcat(sim, new_data), pts, 5, 3, kernel)
-new_cfg   = Vecchia.kdtreeconfig(new_data, pts, 5, 3, kernel)
+joint_cfg = knnconfig(hcat(sim, new_data), pts, 10, kernel)
+new_cfg   = knnconfig(new_data, pts, 10, kernel)
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
-               Vecchia.nll(vecc1, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
+               Vecchia.nll(vecc2, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
 end
 
 # Test 7: confirm that the rchol-based nll is equal to the standard nll.
 @testset "rchol nll" begin
+# no tiles:
 rchol_nll = Vecchia.nll_rchol(vecc2, ones(3), issue_warning=false)
 @test isapprox(rchol_nll, Vecchia.nll(vecc2, ones(3)))
+# tiles:
+_U = rchol(vecc2, ones(3), use_tiles=true, issue_warning=false)
+@test isapprox(Vecchia.nll(_U, reduce(vcat, vecc2.data)),
+               Vecchia.nll(vecc2, ones(3)))
 end
 
 # Test 8: confirm that the rchol built with tiles and without tiles gives the
 # same result:
 @testset "rchol tiles" begin
-U = Vecchia.rchol(vecc1, ones(3), issue_warning=false)
-U_tiles = Vecchia.rchol(vecc1, ones(3), use_tiles=true, issue_warning=false)
+U = Vecchia.rchol(vecc2, ones(3), issue_warning=false)
+U_tiles = Vecchia.rchol(vecc2, ones(3), use_tiles=true, issue_warning=false)
 @test U.diagonals  == U_tiles.diagonals
 @test U.odiagonals == U_tiles.odiagonals
 end
@@ -70,7 +71,7 @@ end
   data = cholesky([kernel(x, y, (1.0, 0.1)) for x in pts, y in pts]).L*randn(length(pts))
 
   cfg  = knnconfig(data, pts, 50, kernel)
-  pcfg = PredictionConfig(cfg, ppts, 50)
+  pcfg = Vecchia.PredictionConfig(cfg, ppts, 50)
   (test_cond_mean, test_cond_var) = Vecchia.dense_posterior(pcfg, [1.0, 0.1])
 
   S1   = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in pts]

@@ -1,4 +1,49 @@
 
+struct RCholesky{T}
+  diagonals::Vector{UpperTriangular{T,Matrix{T}}}
+  odiagonals::Vector{Matrix{T}}
+  condix::Vector{Vector{Int64}}
+  idxs::Vector{UnitRange{Int64}} 
+  is_instantiated::Vector{Bool}
+end
+
+# TODO (cg 2022/05/30 12:10): make this more information.
+Base.display(U::RCholesky{T}) where{T} = println("RCholesky{$T}")
+Base.display(Ut::Adjoint{T,RCholesky{T}}) where{T} = println("Adjoint{$T, RCholesky{$T}}")
+
+# Pass this around instead?
+struct RCholApplicationBuffer{T}
+  bufv::Matrix{T}
+  bufm::Matrix{T}
+  bufz::Matrix{T}
+  out::Matrix{T}
+end
+
+function RCholApplicationBuffer(U::RCholesky{T}, ndata::Int64, ::Val{V}) where{T,V}
+  Z = promote_type(T, V)
+  m = length(U.condix)
+  out  = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufz = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufv = Array{Z}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
+  bufm = Array{Z}(undef, maximum(length, U.idxs), ndata)
+  RCholApplicationBuffer{Z}(bufv, bufm, bufz, out)
+end
+
+struct CondRCholBuf{D,T}
+  buf_pp::Matrix{T}
+  buf_cp::Matrix{T}
+  buf_cc::Matrix{T}
+  buf_cpts::Vector{SVector{D,Float64}}
+end
+
+function crcholbuf(::Val{D}, ::Val{Z}, cpts_sz, pts_sz) where{D,Z}
+  buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
+  buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
+  buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
+  buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
+  CondRCholBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cpts)
+end
+
 function prepare_diagonal_chunks(::Val{T}, sizes) where{T}
   map(sizes) do sz
     UpperTriangular{T, Matrix{T}}(I(sz))
@@ -12,11 +57,23 @@ function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
 end
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
-function RCholesky_alloc(V::AbstractVecchiaConfig{H,D,F}, ::Val{T}) where{H,D,F,T}
+function RCholesky_alloc(V::VecchiaConfig{H,D,F}, ::Val{T}) where{H,D,F,T}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(Val(T), szs)
   odiags = prepare_odiagonal_chunks(Val(T), V.condix, szs)
   RCholesky{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
+end
+
+@generated function allocate_crchol_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 
+                                         cpts_sz, pts_sz) where{N,D,Z}
+  quote
+    Base.Cartesian.@ntuple $N j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz)
+  end
+end
+
+function allocate_crchol_bufs(n::Int64, ::Val{D}, ::Val{Z}, 
+                              cpts_sz, pts_sz) where{D,Z}
+  [crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz) for _ in 1:n]
 end
 
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
