@@ -21,9 +21,12 @@ sim    = randn(rng, length(pts))
 
 # Create a vecc object that uses enough block-conditioning points that the
 # likelihood evaluation is exact.
-vecc2      = knnconfig(sim, pts, 10, kernel)
-vecc_exact = knnconfig(sim, pts, 10000000, kernel)
-#vecc_exact = Vecchia.kdtreeconfig(sim, pts, 5, 10000, kernel)
+vecc2      = VecchiaApproximation(pts, kernel, sim; 
+                                  ordering=NoPermutation(),
+                                  conditioning=KNNConditioning(10))
+vecc_exact = VecchiaApproximation(pts, kernel, sim; 
+                                  ordering=NoPermutation(),
+                                  conditioning=KNNConditioning(100000))
 
 # Test 1: nll gives the exact likelihood for a vecchia config where the
 # conditioning set is every prior point.
@@ -37,8 +40,12 @@ end
 # single-data nlls.
 @testset "multiple data nll" begin
 new_data  = range(0.0, 1.0, length=length(sim))
-joint_cfg = knnconfig(hcat(sim, new_data), pts, 10, kernel)
-new_cfg   = knnconfig(new_data, pts, 10, kernel)
+joint_cfg = VecchiaApproximation(pts, kernel, hcat(sim, new_data); 
+                                  ordering=NoPermutation(),
+                                  conditioning=KNNConditioning(10))
+new_cfg   = VecchiaApproximation(pts, kernel, new_data; 
+                                  ordering=NoPermutation(),
+                                  conditioning=KNNConditioning(10))
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
                Vecchia.nll(vecc2, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
 end

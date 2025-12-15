@@ -1,12 +1,15 @@
 
 module Vecchia
 
-  using Printf, Random, LinearAlgebra, SparseArrays, NearestNeighbors, StaticArrays, HNSW, Distances
+  using Printf, Random, LinearAlgebra, SparseArrays, StaticArrays, HNSW, Distances
+
+  # from Distances.jl
+  export Euclidean, Haversine
 
   include("warnings.jl")
 
   include("vecchia_config.jl")
-  export VecchiaApproximation
+  export VecchiaApproximation, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning
 
   include("utils.jl")
 

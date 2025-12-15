@@ -67,17 +67,14 @@ function split_nll_pieces(V::VecchiaApproximation{H,D,F}, ::Val{Z}, m) where{H,D
   end
 end
 
-"""
-`nll(cfg::VecchiaApproximation, params)`
-
-Returns the negative log-likelihood of parameters `params` under the approximation specified by `cfg`.
-"""
 function nll(V::VecchiaApproximation{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
-  checkthreads()
+  nthr   = BLAS.get_num_threads()
+  BLAS.set_num_threads(1)
   Z      = promote_type(H,T)
   ndata  = size(first(V.data), 2)
-  pieces = split_nll_pieces(V, Val(Z), Threads.nthreads())
+  pieces = split_nll_pieces(V, Val(Z), nthr)
   (logdets, qforms) = _nll(pieces, params) 
+  BLAS.set_num_threads(nthr)
   (logdets*ndata + qforms)/2
 end
 

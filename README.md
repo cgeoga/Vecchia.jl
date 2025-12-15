@@ -1,6 +1,12 @@
 
 # Vecchia.jl
 
+**Note:** this package is undergoing an extensive rewrite on the `main` branch.
+This README is at the time of writing up-to-date on the interface, but until
+`v0.11` is released, please be mindful that this README is subject to big
+changes and should not be what you use for documentation. I apologize for the
+inconvenience and hope to tag the release soon.
+
 This package offers a flexible and optimized framework for fitting parametric
 Gaussian process models to large datasets using the linear-cost [*Vecchia
 approximation*](https://en.wikipedia.org/wiki/Vecchia_approximation). This
@@ -20,69 +26,73 @@ library offers several features that set it apart from others in the space:
 - Because of how great the Julia optimization ecosystem is, you can hook into
   *much* more powerful optimizers than is possible in, for example, R.
 
-The fundamental object is a `Vecchia.VecchiaConfig`, which specifies your
-conditioning sets for each sub-problem and also acts as a functor with methods
-for the negative log-likelihood. Here is a pseudocode example specifying a
-Vecchia approximation with a random ordering and knn conditioning
-sets.
+## Simple usage demonstration
+
+If you have data `data` measured at locations `pts::Vector{SVector{D,Float64}}`
+and you want to fit the parameters of covariance function `kernel(pt_1, pt_2, params)`, 
+here is a very simple template for doing so. This code is optimized to scale
+very well with multiple threads, so please remember to start Julia with
+`julia -t $NTHREADS` among your other arguments.
 ```julia
-using LinearAlgebra, StaticArrays, Vecchia
-using BesselK # provides the AD-compatible Matern model 
+using Vecchia
 
-# VERY IMPORTANT FOR MULTITHREADING, since this is many small BLAS/LAPACK calls:
-BLAS.set_num_threads(1)
+# See below, docstrings, and examples for details on specifying options.
+# This object itself also can be used as a function to give the negative
+# log-likelihood, so `appx(params)` (and autodiff of appx) is supported.
+appx = VecchiaApproximation(pts, kernel, data)
 
-# Say you have:
-# pts::Vector{SVector{D,Float64}}, which are the locations of your measurements.
-# data::Matrix{Float64}, where each column is an iid replicate from the process.
-
-# The covariance function, in this case Matern. You can provide any function
-# here, but it should have this signature of (location_1, location_2, params).
-kernel(x,y,p) = matern(x,y,p)
-
-# Pick the number of conditioning points you want to use in each sub-problem.
-# If you want to use a different number for different problems, you can also
-# provide a vector of different values.
-k = 10
-
-# There are several options for constructing the configuration object that use
-# different strategies for designing conditioning sets. But in general, I think
-# it's hard to go wrong with this one and would suggest it as a default.
-const cfg = knnconfig(data, pts, k, kernel;
-                      randomize=false, # recommend true for lattice data
-                      metric=Vecchia.Euclidean()) # use Haversine if data on a sphere!
-```
-To keep the base package lean, estimation tools are partially given via
-extensions, meaning that you will have to load other packages for individual
-optimizers and such separately. My default recommendation is to use
-[Uno](https://github.com/cvanaret/uno) with the
-[NLPModels.jl](https://github.com/JuliaSmoothOptimizers/NLPModels.jl) framework.
-Here is a demonstration of using that extension framework and fitting your model
-with `Uno`:
-```julia
-# Instead of UnoSolver, could also use, e.g., NLPModelsIpopt, or NLPModelsKNITRO.
-using ForwardDiff, NLPModels, UnoSolver # necessary to load extension(s)
-
-solver  = NLPModelsSolver(uno; preset="filtersqp")
-#solver = NLPModelsSolver(ipopt; tol=1e-4) # for Ipopt
-#solver = NLPModelsSolver(knitro; algorithm=4 # for KNITRO
+# Load in some extensions for estimation. To be modular, this package doesn't
+# hard-code this dependence. The syntax for using alternative solvers is
+# demonstrated in the example files.
+using ForwardDiff, NLPModels, UnoSolver
+solver = NLPModelsSolver(uno; preset="filtersqp")
 mle     = vecchia_estimate(cfg, some_init, solver)
 ```
-But feel free to bring your own solver! There are also extensions for the JuMP
-framework. Moreover, `cfg` has methods for the likelihood itself and can be
-treated directly as an objective function, so you can hand it to anything that
-eats a function a returns a minimizer.
+That easy! Enjoy your linear-cost (approximate) MLEs.
 
 **See the example files for heavily commented demonstrations.**
 
 # Additional functionality
+
+## Approximation configuration options
+
+The full syntax for the constructor looks like this:
+```julia
+appx = VecchiaApproximation(pts, kernel, data;
+                            ordering=default_ordering(pts),
+                            predictionsets=default_predictionsets(),
+                            conditioning=default_conditioning())
+```
+where:
+- `ordering` refers to the way that the points are ordered, which can heavily
+  impact approximation accuracy. The default is a canonical sorting in 1D and a
+  random ordering in 2+ dimensions. Very heuristically, the "best" generic
+  ordering is the most efficiently space-filling one. Random ordering is a
+  pretty decent fast approximation to that. 
+- `predictionsets` is used to specify whether you are "chunking" your
+  approximation. This package supports doing block Vecchia approximations, where
+  the fundamental unit isn't a univariate conditional distribution. At the
+  moment due to the migration, I haven't re-implemented any blocked constructors
+  yet, so the only implemented option is `SingletonPredictionSets()`, which is
+  the default.
+- `conditioning` refers to how conditioning sets are chosen given the ordering.
+  The default is `KNNConditioning(k)`, where `k=5` in 1D and `k=10` in 2+D. You
+  can also specify a `metric` from `Distances.jl` with `KNNConditioning(k,
+  metric)`. If you're on a sphere and `pts` are polar coordinates, for example,
+  you should use `KNNConditioning(k, Haversine(1.0))`.
+
+**The ultimate goal of this design is to make adding new specialized
+constructors simple and straightforward**, so that fancier and more specific
+configuration options can be offered via extensions or implemented on your own
+in custom code.  With time, I will provide more options that also demonstrates
+how one might do that.
 
 ## Sparse precision matrix and ("reverse") Cholesky factors
 
 While it is not necessary for evaluating the negative log-likelihood, in some
 settings it can be useful to use this approximation to produce a sparse
 approximation to the model-implied precision matrix. For this purpose,
-`rchol(cfg, params)` gives a sparse Upper triangular matrix `U` (the "reverse"
+`rchol(appx, params)` gives a sparse Upper triangular matrix `U` (the "reverse"
 Cholesky factor) such that your precision is approximated with `U*U'`.  **Note
 that these objects correspond to permuted data, though, not the ordering in
 which you provided the data**.
@@ -91,7 +101,7 @@ using SparseArrays
 
 # Note that the direct output of Vecchia.rchol is an internal object with just
 # a few methods. But this sparse conversion will give you a good old SparseMatrixCSC.
-U = UpperTriangular(sparse(Vecchia.rchol(cfg, sample_p)))
+U = UpperTriangular(sparse(rchol(appx, sample_p)))
 ```
 You'll get a warning the first time you call `rchol` re-iterating the issue
 about permutations. If you want to avoid that, you can pass in the kwarg
@@ -124,14 +134,11 @@ methods that you need to provide that struct for everything to "just work".
       `rchol` construction to give back an `UpperTriangular` so that fast
       backsolves didn't require any additional factorization or anything.
     - Mean functions.
-    - A `VecchiaConfig` constructor where conditioning set design is more
-      modular, and possibly also amenable to extensions. Perhaps `HNSW` could
-      move from a dep to an extension, and also a Hilbert curve extension could
-      be supported for banded approximation.
     - Predictions and conditional simulation. Right now, there is a
       `PredictionConfig` that is implemented, but it needs much more testing and
       design TLC.
 - A careful investigation into memoization or similar approaches to speed up
+  construction and negative log-likelihood evaluation.
 
 # Citation
 

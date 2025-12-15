@@ -3,8 +3,6 @@ module VecchiaNLPModelsExt
 
   using Vecchia, ForwardDiff, NLPModels
 
-  import Vecchia.UnoNLPSolver
-
   mutable struct VecchiaNLPModel{C,T,S} <: AbstractNLPModel{T,S}
     cfg::C
     meta::NLPModelMeta{T,S}

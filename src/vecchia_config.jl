@@ -36,6 +36,8 @@ struct KNNConditioning{M} <: PredictionSetDesign
   metric::M
 end
 
+KNNConditioning(k::Int64) = KNNConditioning(k, Euclidean())
+
 
 """
   `VecchiaApproximation(pts, kernel, data=nothing; ordering::PointEnumeration, predictionsets::PredictionSetDesign, conditioning::ConditioningSetDesign)
@@ -48,7 +50,7 @@ The primary object of this package that specifies and prepares the point orderin
 
 Keyword arguments, which specify details of the approximation, are:
 
-- `ordering::PointEnumeration`: an option indicating how, if at all, you would like points to be reordered. The default option is `RandomOrdering()`, but there is also `NoPermutation()`. Extensions may provide additional routines.
+- `ordering::PointEnumeration`: an option indicating how, if at all, you would like points to be reordered. The default option is `RandomOrdering()` in 2+D and canonical sorting in 1D, but there is also `NoPermutation()`. Extensions may provide additional routines.
 - `predictionsets::PredictionSetDesign`: an option indicating whether you want to predict single values (`SingletonPredictionSets()`, the default) or chunked prediction sets (not currently available, as legacy code has been removed but not yet ported to an extension).
 - `conditioning::ConditioningSetDesign`: an option indicating how you want to determine conditioning sets. The default is `KNNConditioningSets(10)`. Additional methods may be made available via package extensions.
 """
