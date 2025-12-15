@@ -49,8 +49,13 @@ using ForwardDiff, NLPModels, UnoSolver
 # Specify a solver and hand everything to vecchia_estimate.
 solver = NLPModelsSolver(uno; preset="filtersqp")
 mle    = vecchia_estimate(cfg, some_init, solver)
+
+# perhaps now you wanted to predict with your fitted model?
+# (see the docstrings for options, but hopefully the defaults will serve you well!)
+preds  = predict(appx, prediction_pts, mle)
 ```
-That easy! Enjoy your linear-cost (approximate) MLEs.
+It's that easy! Enjoy your linear-cost (approximate) MLEs, predictions,
+conditional simulations, preconditioners, and more.
 
 **See the example files for heavily commented demonstrations.**
 
