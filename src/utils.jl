@@ -175,3 +175,6 @@ function globalidxs(datavv)
   out
 end
 
+check_canonical_sorted(pts) = false
+check_canonical_sorted(pts::Vector{SVector{1,Float64}}) = issorted(getindex.(pts, 1))
+

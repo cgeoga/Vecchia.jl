@@ -11,6 +11,7 @@ module VecchiaUnoSolverExt
     (model, solver) = uno(nlp; print_solution=false, solver.opts...)
     solution = zeros(length(init))
     UnoSolver.uno_get_primal_solution(solver, solution)
+    solution
   end
 
 end
