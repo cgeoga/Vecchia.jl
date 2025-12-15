@@ -1,5 +1,7 @@
 
-struct VecchiaApproximation{D,F}
+abstract type VecchiaApproximation{D,F} end
+
+struct ChunkedVecchiaApproximation{D,F} <: VecchiaApproximation{D,F}
   kernel::F
   data::Union{Nothing, Vector{Matrix{Float64}}}
   pts::Vector{Vector{SVector{D, Float64}}}
@@ -7,8 +9,36 @@ struct VecchiaApproximation{D,F}
   perm::Vector{Int64}
 end
 
-function Base.display(V::VecchiaApproximation)
-  println("Vecchia configuration with:")
+# TODO (cg 2025/12/14 22:43): write optimized methods for this object. In
+# principle, it should have one less layer of indirection in the pts and data
+# access. I think a much more streamlined but equally optimized version of nll
+# could also be implemented.
+#
+# Actually, for the nll, would just need to make CondLogLikBuf into
+# ChunkedCondLogLikBuf and then make a separate SingletonCondLogLikBuf. Then
+# write a new allocator, a couple other glue methods, and then an optimized
+# cnll_str method. But that should all be quite easy.
+#
+# For rchol, probably even easier to optimize. 
+#
+# Maybe worth trying the Channel-based threading model for both because it would
+# be so simple?
+struct SingletonVecchiaApproximation{D,F} <: VecchiaApproximation{D,F}
+  kernel::F
+  data::Union{Nothing, Matrix{Float64}}
+  pts::Vector{SVector{D, Float64}}
+  condix::Vector{Vector{Int64}} 
+  perm::Vector{Int64}
+end
+
+function Base.display(V::ChunkedVecchiaApproximation)
+  println("Chunked Vecchia configuration with:")
+  println("  - prediction set size:   $(chunksize(V))")
+  println("  - conditioning set size: $(blockrank(V))")
+end
+
+function Base.display(V::SingletonVecchiaApproximation)
+  println("Chunked Vecchia configuration with:")
   println("  - prediction set size:   $(chunksize(V))")
   println("  - conditioning set size: $(blockrank(V))")
 end
