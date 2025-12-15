@@ -107,7 +107,9 @@ U = UpperTriangular(sparse(rchol(appx, sample_p)))
 ```
 You'll get a warning the first time you call `rchol` re-iterating the issue
 about permutations. If you want to avoid that, you can pass in the kwarg
-`issue_warning=false`.
+`issue_warning=false`. If you just want the matrix approximation and don't
+have data, you can pass in `nothing` instead of a data vector when building
+`appx`.
 
 
 ## Estimation with a nugget/measurement error
