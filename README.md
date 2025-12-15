@@ -45,8 +45,10 @@ appx = VecchiaApproximation(pts, kernel, data)
 # hard-code this dependence. The syntax for using alternative solvers is
 # demonstrated in the example files.
 using ForwardDiff, NLPModels, UnoSolver
+
+# Specify a solver and hand everything to vecchia_estimate.
 solver = NLPModelsSolver(uno; preset="filtersqp")
-mle     = vecchia_estimate(cfg, some_init, solver)
+mle    = vecchia_estimate(cfg, some_init, solver)
 ```
 That easy! Enjoy your linear-cost (approximate) MLEs.
 
