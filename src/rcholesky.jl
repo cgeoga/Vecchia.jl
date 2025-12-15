@@ -57,7 +57,7 @@ function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
 end
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
-function RCholesky_alloc(V::VecchiaApproximation{H,D,F}, ::Val{T}) where{H,D,F,T}
+function RCholesky_alloc(V::VecchiaApproximation{D,F}, ::Val{T}) where{D,F,T}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(Val(T), szs)
   odiags = prepare_odiagonal_chunks(Val(T), V.condix, szs)
@@ -78,8 +78,8 @@ end
 
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
 # here. Maybe I can pre-allocate things for the BLAS calls, even?
-function rchol_instantiate!(strbuf::RCholesky, V::VecchiaApproximation{H,D,F},
-                           params::AbstractVector{T}, ::Val{Z}, tiles) where{H,D,F,T,Z}
+function rchol_instantiate!(strbuf::RCholesky, V::VecchiaApproximation{D,F},
+                           params::AbstractVector{T}, ::Val{Z}, tiles) where{D,F,T,Z}
   checkthreads()
   @assert !strbuf.is_instantiated[] RCHOL_INSTANTIATE_ERROR
   strbuf.is_instantiated[] = true
@@ -173,19 +173,17 @@ Optional keyword arguments are:
 - `issue_warning`, where a value of `false` will silence the warning about using the correct permutation, and
 - `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models with many redundant kernel evaluations.
 """
-function rchol(V::VecchiaApproximation{H,D,F}, params::AbstractVector{T}; 
-               issue_warning=true, use_tiles=false) where{H,D,F,T}
+function rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T}; 
+               issue_warning=true, use_tiles=false) where{D,F,T}
   if issue_warning
     notify_disable("issue_warning=false")
     @warn RCHOL_WARN maxlog=1
   end
   # allocate:
-  out = RCholesky_alloc(V, Val(promote_type(T,H)))
-  # compute the out type and the number of threads to pass in as vals:
-  Z   = promote_type(H, T)
+  out = RCholesky_alloc(V, Val(T))
   # create tiles if requested:
-  tiles = use_tiles ? build_tiles(V, params, Val(Z)) : nothing
-  rchol_instantiate!(out, V, params, Val(Z), tiles)
+  tiles = use_tiles ? build_tiles(V, params) : nothing
+  rchol_instantiate!(out, V, params, Val(Float64), tiles)
   out
 end
 
@@ -235,8 +233,8 @@ function _rchol_nll_term(U, buf, data, k)
 end
 
 # This is really just for debugging.
-function nll_rchol(V::VecchiaApproximation{H,D,F}, params::AbstractVector{T};
-                   issue_warning=true) where{H,D,F,T}
+function nll_rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T};
+                   issue_warning=true) where{D,F,T}
   U    = rchol(V, params; issue_warning=issue_warning)
   data = reduce(vcat, V.data)
   nll(U, data)

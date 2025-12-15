@@ -74,8 +74,8 @@ function (k::ErrorKernel{K})(x, y, p) where{K}
   k.kernel(x,y,p)+k.error(x,y,p)
 end
 
-struct ExpectedJointNll{H,D,F,R} <: Function
-  cfg::VecchiaApproximation{H,D,F}
+struct ExpectedJointNll{D,F,R} <: Function
+  cfg::VecchiaApproximation{D,F}
   errormodel::R
   data_minus_z0::Matrix{Float64}
   presolved_saa::Matrix{Float64}
@@ -84,17 +84,16 @@ end
 
 # Trying to move to callable structs instead of closures so that the
 # precompilation can be better...
-function (E::ExpectedJointNll{H,D,F})(p::AbstractVector{T}) where{H,D,F,T}
+function (E::ExpectedJointNll{D,F})(p::AbstractVector{T}) where{D,F,T}
   # Like with the normal nll function, this section handles the things that
   # create type instability, and then passes them to _nll so that the function
   # barrier means that everything _inside_ _nll, which we want to be fast and
   # multithreaded, is stable and non-allocating.
-  Z     = promote_type(H,T)
   ndata = size(E.data_minus_z0, 2)
   # compute the following terms at once using the augmented data:
   # - nll(V, z0)
   # - (2M)^{-1} sum_j \norm[2]{U(\p)^T v_j}^2, w/ v_j the pre-solved SAA.
-  pieces = split_nll_pieces(E.cfg, Val(Z), Threads.nthreads())
+  pieces = split_nll_pieces(E.cfg, Val(T), Threads.nthreads())
   (logdets, qforms) = _nll(pieces, p)
   out  = (logdets*ndata + qforms)/2
   # add on the generic nll for the measurement noise and the quadratic forms
@@ -120,12 +119,12 @@ function prepare_z0_SR0(cfg, arg, data, errormodel)
   (SRf\(Rinv*data), SRf)
 end
 
-function augmented_em_cfg(V::VecchiaApproximation{H,D,F}, z0, presolved_saa) where{H,D,F}
+function augmented_em_cfg(V::VecchiaApproximation{D,F}, z0, presolved_saa) where{D,F}
   chunksix = chunk_indices(V.pts)
   new_data = map(chunksix) do ixj
     hcat(z0[ixj,:], presolved_saa[ixj,:])
   end
-  Vecchia.VecchiaApproximation{H,D,F}(V.kernel, new_data, V.pts, V.condix)
+  Vecchia.VecchiaApproximation{D,F}(V.kernel, new_data, V.pts, V.condix)
 end
 
 function em_step(cfg, arg, saa, errormodel, solver, box_lower, box_upper)
@@ -166,8 +165,8 @@ function vecchia_estimate_nugget(cfg, init, solver, errormodel; kwargs...)
   vecchia_estimate(nugcfg, init, solver; kwargs...)
 end
 
-struct EMVecchiaIterable{H,D,F,O,R}
-  cfg::VecchiaApproximation{H,D,F}
+struct EMVecchiaIterable{D,F,O,R}
+  cfg::VecchiaApproximation{D,F}
   step_new::Vector{Float64}
   step_old::Vector{Float64}
   saa::Matrix{Float64}
@@ -198,8 +197,8 @@ function EMiterable(cfg, init, saa, errormodel, solver, box_lower, box_upper; kw
                     errormodel, solver, box_lower, box_upper)
 end
 
-function Base.iterate(it::EMVecchiaIterable{H,D,F,O,R}, 
-                      iteration::Int=0) where{H,D,F,O,R}
+function Base.iterate(it::EMVecchiaIterable{D,F,O,R}, 
+                      iteration::Int=0) where{D,F,O,R}
   # check if 2-norm convergence is achieved:
   if iteration > 1
     if norm(it.step_new - it.step_old) < it.norm2tol

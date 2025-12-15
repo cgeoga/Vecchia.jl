@@ -10,7 +10,7 @@ function Base.getindex(tiles::CovarianceTiles{T}, j::Int64, k::Int64) where{T}
   throw(error("No tile available for pair ($j, $k)."))
 end
 
-function alloc_tiles(pts, condix, ::Val{H}) where{H}
+function alloc_tiles(pts, condix)
   req_pairs = Set{Tuple{Int64, Int64}}()
   sizehint!(req_pairs, 2*length(condix)*maximum(length, condix))
   for j in eachindex(condix)
@@ -27,7 +27,7 @@ function alloc_tiles(pts, condix, ::Val{H}) where{H}
   bufs = map(req_pairs) do jk
     (ptj, ptk) = (pts[jk[1]], pts[jk[2]])
     (lj, lk)   = (length(ptj), length(ptk))
-    buf = Array{H}(undef, lj, lk)
+    buf = Array{Float64}(undef, lj, lk)
   end
   (req_pairs, bufs) 
 end
@@ -48,13 +48,13 @@ function update_tile_buffers!(tiles::CovarianceTiles{T}, pts, kernel::F,
   tiles
 end
 
-function build_tiles(pts, condix, kernel::F, p, ::Val{H}) where{F,H}
-  (req_pairs, bufs) = alloc_tiles(pts, condix, Val(H))
+function build_tiles(pts, condix, kernel::F, p) where{F}
+  (req_pairs, bufs) = alloc_tiles(pts, condix)
   tiles = CovarianceTiles(Dict(zip(req_pairs, bufs)))
   update_tile_buffers!(tiles, pts, kernel, req_pairs, p)
 end
 
-function build_tiles(cfg::VecchiaApproximation{H,D,F}, p, ::Val{Z}) where{H,D,F,Z}
-  build_tiles(cfg.pts, cfg.condix, cfg.kernel, p, Val(Z))
+function build_tiles(cfg::VecchiaApproximation{D,F}, p) where{D,F}
+  build_tiles(cfg.pts, cfg.condix, cfg.kernel, p)
 end
 

@@ -18,8 +18,8 @@ function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
   CondLogLikBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
 end
 
-struct VecchiaLikelihoodPiece{H,D,F,T}
-  cfg::VecchiaApproximation{H,D,F}
+struct VecchiaLikelihoodPiece{D,F,T}
+  cfg::VecchiaApproximation{D,F}
   buf::CondLogLikBuf{D,T}
   ixrange::UnitRange{Int64}
 end
@@ -28,11 +28,11 @@ end
 # to try and faciliate parallel reverse-mode differentiation because each of the
 # pieces would yield a single-threaded routine to make a ReverseDiff tape for.
 # But it's been years and I haven't done that yet, so it's probably time.
-struct PieceEvaluation{H,D,F,T} <: Function
-  piece::VecchiaLikelihoodPiece{H,D,F,T}
+struct PieceEvaluation{D,F,T} <: Function
+  piece::VecchiaLikelihoodPiece{D,F,T}
 end
 
-function (c::PieceEvaluation{H,D,F,T})(p) where{H,D,F,T}
+function (c::PieceEvaluation{D,F,T})(p) where{D,F,T}
   (logdets, qforms) = c.piece(p)
   ndata = size(first(c.piece.cfg.data), 2)
   (ndata*logdets + qforms)/2
@@ -45,7 +45,7 @@ end
 
 # see ./structstypes.jl for a def of the struct fields. But since this method is
 # the core logic for the nll function, I think it should live here.
-function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
+function (vp::VecchiaLikelihoodPiece{D,F,T})(p) where{D,F,T}
   out_logdet = zero(eltype(p))
   out_qforms = zero(eltype(p))
   for j in vp.ixrange
@@ -56,7 +56,9 @@ function (vp::VecchiaLikelihoodPiece{H,D,F,T})(p) where{H,D,F,T}
   (out_logdet, out_qforms)
 end
 
-function split_nll_pieces(V::VecchiaApproximation{H,D,F}, ::Val{Z}, m) where{H,D,F,Z}
+# TODO (cg 2025/12/14 18:52): these type games can be simplified now that H is
+# being removed.
+function split_nll_pieces(V::VecchiaApproximation{D,F}, ::Val{Z}, m) where{D,F,Z}
   ndata   = size(first(V.data), 2)
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
@@ -67,21 +69,20 @@ function split_nll_pieces(V::VecchiaApproximation{H,D,F}, ::Val{Z}, m) where{H,D
   end
 end
 
-function nll(V::VecchiaApproximation{H,D,F}, params::AbstractVector{T}) where{H,D,F,T}
+function nll(V::VecchiaApproximation{D,F}, params::AbstractVector{T}) where{D,F,T}
   nthr   = BLAS.get_num_threads()
   BLAS.set_num_threads(1)
-  Z      = promote_type(H,T)
   ndata  = size(first(V.data), 2)
-  pieces = split_nll_pieces(V, Val(Z), nthr)
+  pieces = split_nll_pieces(V, Val(T), nthr)
   (logdets, qforms) = _nll(pieces, params) 
   BLAS.set_num_threads(nthr)
   (logdets*ndata + qforms)/2
 end
 
-(V::VecchiaApproximation{H,D,F})(p) where{H,D,F} = nll(V, p)
+(V::VecchiaApproximation{D,F})(p) where{D,F} = nll(V, p)
 
-function _nll(pieces::Vector{VecchiaLikelihoodPiece{H,D,F,T}}, 
-              params) where{H,D,F,T}
+function _nll(pieces::Vector{VecchiaLikelihoodPiece{D,F,T}}, 
+              params) where{D,F,T}
   logdets = zeros(eltype(params), length(pieces))
   qforms  = zeros(eltype(params), length(pieces))
   @sync for j in eachindex(pieces)
@@ -95,8 +96,8 @@ function _nll(pieces::Vector{VecchiaLikelihoodPiece{H,D,F,T}},
   (sum(logdets), sum(qforms))
 end
 
-function cnll_str(V::VecchiaApproximation{H,D,F}, j::Int, 
-                  strbuf::CondLogLikBuf{D,T}, params) where{H,D,F,T}
+function cnll_str(V::VecchiaApproximation{D,F}, j::Int, 
+                  strbuf::CondLogLikBuf{D,T}, params) where{D,F,T}
   # prepare the marginal points and buffer:
   pts    = V.pts[j]
   dat    = V.data[j]

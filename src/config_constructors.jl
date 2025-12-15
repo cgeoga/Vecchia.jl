@@ -74,6 +74,6 @@ function VecchiaApproximation(pts::Vector{SVector{D,Float64}},
   (perm, _pts_perm, _data_perm) = permute_points_and_data(pts, data, ordering)
   condix = conditioningsets(_pts_perm, conditioning)
   (pts_str, data_str) = format_points_and_data(_pts_perm, _data_perm, predictionsets)
-  VecchiaApproximation{Float64,D,K}(kernel, data_str, pts_str, condix, perm)
+  VecchiaApproximation(kernel, data_str, pts_str, condix, perm)
 end
 

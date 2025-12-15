@@ -1,7 +1,7 @@
 
-struct VecchiaApproximation{H,D,F}
+struct VecchiaApproximation{D,F}
   kernel::F
-  data::Union{Nothing, Vector{Matrix{H}}}
+  data::Union{Nothing, Vector{Matrix{Float64}}}
   pts::Vector{Vector{SVector{D, Float64}}}
   condix::Vector{Vector{Int64}} 
   perm::Vector{Int64}
