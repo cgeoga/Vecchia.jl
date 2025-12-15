@@ -26,6 +26,7 @@ VecchiaUnoSolverExt = ["NLPModels", "ForwardDiff", "UnoSolver"]
 Distances = "0.10.12"
 HNSW = "0.1.5"
 NLPModels = "0.21.6"
+Printf = "1.11.0"
 Random = "1.11.0"
 StaticArrays = "1"
 UnoSolver = "0.1.7"

@@ -94,55 +94,49 @@ how one might do that.
 While it is not necessary for evaluating the negative log-likelihood, in some
 settings it can be useful to use this approximation to produce a sparse
 approximation to the model-implied precision matrix. For this purpose,
-`rchol(appx, params)` gives a sparse Upper triangular matrix `U` (the "reverse"
-Cholesky factor) such that your precision is approximated with `U*U'`.  **Note
-that these objects correspond to permuted data, though, not the ordering in
-which you provided the data**.
+`rchol(appx, params)` gives a (permuted) sparse inverse Cholesky factor for your
+matrix. If `ordering=NoPermutation()` in your `VecchiaApproximation`
+constructor, then one precisely has the approximation that your precision matrix
+is approximated with `U*U'`, where `U` is `UpperTriangular`. Build it like so:
 ```julia
 using SparseArrays 
 
-# Note that the direct output of Vecchia.rchol is an internal object with just
-# a few methods. But this sparse conversion will give you a good old SparseMatrixCSC.
-U = UpperTriangular(sparse(rchol(appx, sample_p)))
+# This object has some standard methods: mul!/*, ldiv!/\, logdet, etc.
+U = rchol(appx, sample_p)
 ```
-You'll get a warning the first time you call `rchol` re-iterating the issue
-about permutations. If you want to avoid that, you can pass in the kwarg
-`issue_warning=false`. If you just want the matrix approximation and don't
-have data, you can pass in `nothing` instead of a data vector when building
-`appx`.
+Additionally, this package offers the convenience constructor of
+`rchol_preconditioner`, which gives a preconditioner object for your implied
+kernel matrix. Here is an example building the preconditioner and solving a
+linear system with `Krylov.jl`.
+```julia
+using Krylov
 
+# Note that we don't need to pass the data in here when building the
+# VecchiaApproximation, as we won't need it.
+#
+# For a preconditioner, I recommend cranking up the number of conditioning
+# points a bit past the defaults, which are tuned for likelihoods.
+appx = VecchiaApproximation(pts, matern; conditioning=KNNConditioning(25))
+pre  = rchol_preconditioner(appx, [5.0, 0.1, 2.25])
 
-## Estimation with a nugget/measurement error
+# the dense exact covariance matrix for comparison that will be used for cg.
+M = [matern(x, y, [5.0, 0.1, 2.25]) for x in pts, y in pts]
 
-As mentioned above, measurement error can really hurt the accuracy of these
-approximations. If your model is effectively given by `data(x) = good_gp(x) +
-iid_noise(x)`, where `good_gp` is something that screens well that you actually
-want to use Vecchia on and `iid_noise` has VARIANCE `eta^2`, then you can
-estimate all parameters, including `eta^2`, with the built in EM algorithm
-procedure that is demonstrated in `./example/example_estimate_noise.jl`. See
-also the [paper](https://arxiv.org/abs/2208.06877) for a lot more information.
+# a sample RHS.
+v = collect(1.0:length(pts))
 
-This method works equally well for **any** perturbation whose covariance matrix
-admits a fast solve, although ideally also a fast log-determinant. The code now
-allows you to provide an arbitrary struct for working with the error covariance
-matrix, and you can inspect `./src/errormatrix.jl` for a demonstration of the
-methods that you need to provide that struct for everything to "just work".
-
-**If you use this method, please cite [this paper](https://arxiv.org/abs/2208.06877)**.
+# a Vecchia preconditioner in action (try re-running this without the
+# preconditioner and see how slowly it converges...)
+sol2 = cg(Symmetric(M), v; M=pre, ldiv=false, verbose=1) # ~ 15 iterations
+```
 
 # Roadmap to 1.0:
 
 - More thoughtful interfaces for:
-    - How internal permutations are handled. It would probably be best to
-      abstract that away from the user, but it would also be nice for the sparse
-      `rchol` construction to give back an `UpperTriangular` so that fast
-      backsolves didn't require any additional factorization or anything.
     - Mean functions.
-    - Predictions and conditional simulation. Right now, there is a
-      `PredictionConfig` that is implemented, but it needs much more testing and
-      design TLC.
 - A careful investigation into memoization or similar approaches to speed up
   construction and negative log-likelihood evaluation.
+- Some time for users to kick the tires on the new design.
 
 # Citation
 

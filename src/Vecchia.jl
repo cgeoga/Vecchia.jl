@@ -1,12 +1,10 @@
 
 module Vecchia
 
-  using Printf, Random, LinearAlgebra, SparseArrays, StaticArrays, HNSW, Distances
+  using Random, LinearAlgebra, SparseArrays, StaticArrays, HNSW, Distances
 
   # from Distances.jl
   export Euclidean, Haversine
-
-  include("warnings.jl")
 
   include("vecchia_config.jl")
   export VecchiaApproximation, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning
@@ -21,17 +19,13 @@ module Vecchia
   include("nll.jl")
 
   include("rcholesky.jl")
-  export rchol
-
-  include("em.jl")
+  export rchol, rchol_preconditioner
 
   include("extensions.jl")
   export NLPModelsSolver, vecchia_estimate, vecchia_estimate_nugget
 
   include("predict.jl")
   export predict
-
-  #include("predict_sim.jl")
 
 end 
 

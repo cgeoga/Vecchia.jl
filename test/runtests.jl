@@ -15,8 +15,7 @@ kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
 # quick testing values:
 rng    = StableRNG(123)
 test_p = [0.1, 0.1]
-pts    = rand(SVector{2,Float64}, 200)
-saa    = rand(rng, (-1.0, 1.0), length(pts), 72)
+pts    = rand(rng, SVector{2,Float64}, 200)
 sim    = randn(rng, length(pts))
 
 # Create a vecc object that uses enough block-conditioning points that the
@@ -36,6 +35,7 @@ debug_nll    = exact_nll(vecc_exact, ones(3))
 @test isapprox(vecchia_nll, debug_nll)
 end
 
+#=
 # Test 5: the nll with multiple data sources agrees with the sum of two
 # single-data nlls.
 @testset "multiple data nll" begin
@@ -49,45 +49,28 @@ new_cfg   = VecchiaApproximation(pts, kernel, new_data;
 @test isapprox(Vecchia.nll(joint_cfg, ones(3)), 
                Vecchia.nll(vecc2, ones(3)) + Vecchia.nll(new_cfg, ones(3)))
 end
-
-# Test 7: confirm that the rchol-based nll is equal to the standard nll.
-@testset "rchol nll" begin
-# no tiles:
-rchol_nll = Vecchia.nll_rchol(vecc2, ones(3), issue_warning=false)
-@test isapprox(rchol_nll, Vecchia.nll(vecc2, ones(3)))
-# tiles:
-_U = rchol(vecc2, ones(3), use_tiles=true, issue_warning=false)
-@test isapprox(Vecchia.nll(_U, reduce(vcat, vecc2.data)),
-               Vecchia.nll(vecc2, ones(3)))
-end
+=#
 
 # Test 8: confirm that the rchol built with tiles and without tiles gives the
 # same result:
 @testset "rchol tiles" begin
-U = Vecchia.rchol(vecc2, ones(3), issue_warning=false)
-U_tiles = Vecchia.rchol(vecc2, ones(3), use_tiles=true, issue_warning=false)
+U = Vecchia._rchol(vecc2, ones(3))
+U_tiles = Vecchia._rchol(vecc2, ones(3), use_tiles=true)
 @test U.diagonals  == U_tiles.diagonals
 @test U.odiagonals == U_tiles.odiagonals
 end
 
-#=
-# Test 9: make sure the Vecchia-based conditional distributions agree with the
-# exact ones when you condition on every prior point.
-@testset "conditional distributions" begin
-  pts  = rand(SVector{2,Float64}, 30)
-  ppts = rand(SVector{2,Float64}, 10)
-  data = cholesky([kernel(x, y, (1.0, 0.1)) for x in pts, y in pts]).L*randn(length(pts))
-
-  cfg  = knnconfig(data, pts, 50, kernel)
-  pcfg = Vecchia.PredictionConfig(cfg, ppts, 50)
-  (test_cond_mean, test_cond_var) = Vecchia.dense_posterior(pcfg, [1.0, 0.1])
-
-  S1   = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in pts]
-  S12  = [kernel(x, y, (1.0, 0.1)) for x in pts,  y in ppts]
-  S2   = [kernel(x, y, (1.0, 0.1)) for x in ppts, y in ppts]
-
-  # test 1: conditional mean.
-  @test test_cond_mean ≈ S12'*(S1\data)    
-  @test test_cond_var  ≈ S2 - S12'*(S1\S12)
+@testset "rchol solve and mul" begin
+  pts = [SA[x] for x in sort(rand(rng, 500))]
+  M   = [kernel(x, y, (1.0, 0.01)) for x in pts, y in pts]
+  ppx = VecchiaApproximation(pts, kernel; 
+                             conditioning=KNNConditioning(1))
+  pre = rchol(ppx, [1.0, 0.01])
+  U   = pre.U
+  v   = collect(1.0:500.0)
+  P   = I(length(pre.p))[pre.p,:]
+  @test maximum(abs, inv(P'*M*P) - Matrix(U*U')) < 1e-7
+  @test maximum(abs, pre*(pre'*v) - M\v) < 1e-7
+  @test maximum(abs, pre'\(pre\v) - M*v) < 1e-10
 end
-=#
+

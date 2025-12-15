@@ -1,5 +1,132 @@
 
-struct RCholesky{T}
+# TODO (cg 2025/12/15 14:17): 
+#
+# - generalize the extra methods for AbstractMatrix as well. Just need to do a
+# little for loop for the permutations.
+
+struct RCholesky <: AbstractMatrix{Float64}
+  U::UpperTriangular{Float64, SparseMatrixCSC{Float64, Int64}}
+  p::Vector{Int64}
+  ip::Vector{Int64}
+  buf::Vector{Float64}
+end
+
+function Base.display(rc::RCholesky)
+  println("RCholesky factor with: ")
+  println("  - size:         $(size(rc))")
+  println("  - nzfraction:   $(nnz(rc.U)/prod(size(rc)))")
+end
+
+function Base.display(arc::Adjoint{Float64, RCholesky})
+  rc = arc.parent
+  println("Adjoint RCholesky factor with: ")
+  println("  - size:         $(size(rc))")
+  println("  - nzfraction:   $(nnz(rc.U)/prod(size(rc)))")
+end
+
+Base.size(rc::RCholesky)    = size(rc.U)
+Base.size(rc::RCholesky, j) = size(rc.U, j)
+Base.eltype(rc::RCholesky)  = Float64
+
+Base.adjoint(rc::RCholesky) = Adjoint{Float64, RCholesky}(rc)
+
+LinearAlgebra.issymmetric(rc::RCholesky) = false
+LinearAlgebra.ishermitian(rc::RCholesky) = false
+
+function LinearAlgebra.mul!(buf, rc::RCholesky, v)
+  mul!(buf, rc.U, v)
+  permute!(buf, rc.ip)
+end
+
+function Base.:*(rc::RCholesky, v)
+  buf = similar(v)
+  mul!(buf, rc, v)
+end
+
+function LinearAlgebra.mul!(buf, arc::Adjoint{Float64, RCholesky}, 
+                            v::AbstractVector)
+  rc = arc.parent
+  copyto!(rc.buf, v)
+  permute!(rc.buf, rc.p)
+  mul!(buf, rc.U', rc.buf)
+end
+
+function Base.:*(arc::Adjoint{Float64, RCholesky}, v::AbstractVector)
+  rc  = arc.parent
+  buf = similar(v)
+  mul!(buf, arc, v)
+end
+
+function LinearAlgebra.ldiv!(rc::RCholesky, v)
+  permute!(v, rc.p)
+  ldiv!(rc.U, v)
+end
+
+function LinearAlgebra.ldiv!(buf, rc::RCholesky, v)
+  copyto!(buf, v)
+  ldiv!(rc, buf)
+end
+
+function Base.:\(rc::RCholesky, v::AbstractVector)
+  buf = similar(v)
+  ldiv!(buf, rc, v)
+end
+
+function LinearAlgebra.ldiv!(arc::Adjoint{Float64, RCholesky}, 
+                             v::AbstractVector)
+  rc = arc.parent
+  ldiv!(rc.U', v)
+  permute!(v, rc.ip)
+end
+
+function LinearAlgebra.ldiv!(buf::AbstractVector, 
+                             arc::Adjoint{Float64, RCholesky}, 
+                             v::AbstractVector)
+  copyto!(buf, v)
+  ldiv!(arc, buf)
+end
+
+function Base.:\(arc::Adjoint{Float64, RCholesky}, v::AbstractVector)
+  buf = similar(v)
+  ldiv!(buf, arc, v)
+end
+
+LinearAlgebra.logdet(rc::RCholesky) = logdet(rc.U)
+
+struct RCholeskyPreconditioner <: AbstractMatrix{Float64}
+  U::UpperTriangular{Float64, SparseMatrixCSC{Float64, Int64}}
+  p::Vector{Int64}
+  ip::Vector{Int64}
+  buf::Vector{Float64}
+end
+
+function Base.display(rc::RCholeskyPreconditioner)
+  println("RCholeskyPreconditioner with: ")
+  println("  - size:                          $(size(rc))")
+  println("  - (Cholesky factor) nzfraction:   $(nnz(rc.U)/prod(size(rc)))")
+end
+
+Base.size(rc::RCholeskyPreconditioner)    = size(rc.U)
+Base.size(rc::RCholeskyPreconditioner, j) = size(rc.U, j)
+Base.eltype(rc::RCholeskyPreconditioner)  = Float64
+
+function Base.adjoint(rc::RCholeskyPreconditioner) 
+  Adjoint{Float64, RCholeskyPreconditioner}(rc)
+end
+
+LinearAlgebra.issymmetric(rc::RCholeskyPreconditioner) = true
+LinearAlgebra.ishermitian(rc::RCholeskyPreconditioner) = true
+
+function LinearAlgebra.mul!(buf, rc::RCholeskyPreconditioner, v::AbstractVector)
+  copyto!(rc.buf, v)
+  permute!(rc.buf, rc.p)
+  mul!(buf, rc.U', rc.buf)
+  mul!(rc.buf, rc.U, buf)
+  permute!(rc.buf, rc.ip)
+  copyto!(buf, rc.buf)
+end
+
+struct RCholeskyStorage{T}
   diagonals::Vector{UpperTriangular{T,Matrix{T}}}
   odiagonals::Vector{Matrix{T}}
   condix::Vector{Vector{Int64}}
@@ -7,19 +134,7 @@ struct RCholesky{T}
   is_instantiated::Vector{Bool}
 end
 
-# TODO (cg 2022/05/30 12:10): make this more information.
-Base.display(U::RCholesky{T}) where{T} = println("RCholesky{$T}")
-Base.display(Ut::Adjoint{T,RCholesky{T}}) where{T} = println("Adjoint{$T, RCholesky{$T}}")
-
-# Pass this around instead?
-struct RCholApplicationBuffer{T}
-  bufv::Matrix{T}
-  bufm::Matrix{T}
-  bufz::Matrix{T}
-  out::Matrix{T}
-end
-
-function RCholApplicationBuffer(U::RCholesky{T}, ndata::Int64, ::Val{V}) where{T,V}
+function RCholApplicationBuffer(U::RCholeskyStorage{T}, ndata::Int64, ::Val{V}) where{T,V}
   Z = promote_type(T, V)
   m = length(U.condix)
   out  = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
@@ -57,11 +172,11 @@ function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
 end
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
-function RCholesky_alloc(V::VecchiaApproximation{D,F}, ::Val{T}) where{D,F,T}
+function RCholeskyStorage_alloc(V::VecchiaApproximation{D,F}, ::Val{T}) where{D,F,T}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(Val(T), szs)
   odiags = prepare_odiagonal_chunks(Val(T), V.condix, szs)
-  RCholesky{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
+  RCholeskyStorage{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
 @generated function allocate_crchol_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 
@@ -78,18 +193,20 @@ end
 
 # TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
 # here. Maybe I can pre-allocate things for the BLAS calls, even?
-function rchol_instantiate!(strbuf::RCholesky, V::VecchiaApproximation{D,F},
-                           params::AbstractVector{T}, ::Val{Z}, tiles) where{D,F,T,Z}
-  checkthreads()
+function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,F},
+                            params::AbstractVector{T}, ::Val{Z}, tiles) where{D,F,T,Z}
   @assert !strbuf.is_instantiated[] RCHOL_INSTANTIATE_ERROR
   strbuf.is_instantiated[] = true
   kernel  = V.kernel
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
   # allocate three buffers:
-  bufs = allocate_crchol_bufs(Threads.nthreads(), Val(D), Val(Z), cpts_sz, pts_sz)
+  nthr = Threads.nthreads()
+  bufs = allocate_crchol_bufs(nthr, Val(D), Val(Z), cpts_sz, pts_sz)
   # do the main loop:
   m = cld(length(V.condix), Threads.nthreads())
+  blas_nthr = BLAS.get_num_threads()
+  BLAS.set_num_threads(1)
   @sync for (i, chunk) in enumerate(Iterators.partition(1:length(V.condix), m))
     Threads.@spawn for j in chunk
       # get the buffer for this thread:
@@ -154,103 +271,13 @@ function rchol_instantiate!(strbuf::RCholesky, V::VecchiaApproximation{D,F},
       end
     end
   end
-  nothing
+  BLAS.set_num_threads(blas_nthr)
+  strbuf
 end
 
-"""
-`rchol(cfg::VecchiaApproximation, params; issue_warning=true, use_tiles=false)`
-
-A method for assembling an upper-triangular matrix `U` that gives a sparse "reverse" Cholesky factor for your precision matrix. In particular, if
-```
-data = reduce(vcat, cfg.data) # to be sure of the permutations matching
-```
-and `S =`Var(`data[:,1]`), then `inv(S) ≈ U*U'`, where
-```
-U = UpperTriangular(sparse(rchol(cfg, params))).
-```
-
-Optional keyword arguments are:
-- `issue_warning`, where a value of `false` will silence the warning about using the correct permutation, and
-- `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models with many redundant kernel evaluations.
-"""
-function rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T}; 
-               issue_warning=true, use_tiles=false) where{D,F,T}
-  if issue_warning
-    notify_disable("issue_warning=false")
-    @warn RCHOL_WARN maxlog=1
-  end
-  # allocate:
-  out = RCholesky_alloc(V, Val(T))
-  # create tiles if requested:
-  tiles = use_tiles ? build_tiles(V, params) : nothing
-  rchol_instantiate!(out, V, params, Val(Float64), tiles)
-  out
-end
-
-function nll(U::RCholesky{T}, data::AbstractVecOrMat{V}) where{T,V}
-  buffers = [RCholApplicationBuffer(U, size(data,2), Val(V)) 
-             for _ in 1:Threads.nthreads()]
-  (logdets, qforms) = _nll(U, buffers, data)
-  (logdets + qforms)/2
-end
-
-# Note that if the RChol factorization gives \Sigma^{-1} = U*U^T, then this
-# computes the nll with the logdet how you'd expect and the quadratic form
-# computed as sum(abs2, U^T*y). But I've squeezed all the allocations out of the
-# hot loop so that it can be parallelized, so each little piece of U^T*y is
-# computed in parallel (see _rchol_nll_term below for the code for an individual
-# term).
-function _nll(U::RCholesky{T}, buffers::Vector{RCholApplicationBuffer{V}},
-              data) where{T,V}
-  logdets = zeros(T, length(buffers))
-  qforms  = zeros(T, length(buffers))
-  m       = cld(length(U.condix), length(buffers))
-  chunks  = Iterators.partition(eachindex(U.condix), m)
-  @sync for (j, chunk) in enumerate(chunks)
-    buf = buffers[j]
-    Threads.@spawn for k in chunk
-      (ldk, qfk)  = _rchol_nll_term(U, buf, data, k)
-      logdets[j] += ldk
-      qforms[j]  += qfk
-    end
-  end
-  (sum(logdets), sum(qforms))
-end
-
-function _rchol_nll_term(U, buf, data, k)
-  ck   = U.condix[k]
-  ixk  = U.idxs[k]
-  out_mod_chunk = view(buf.out, 1:length(ixk), :)
-  mul!(out_mod_chunk, U.diagonals[k]', view(data, ixk, :))
-  isempty(ck) && return (-2*logdet(U.diagonals[k]), sum(_square, out_mod_chunk))
-  ixck = view(U.idxs, ck)
-  Bjt_chunk = U.odiagonals[k]
-  bufv_v = prepare_v_buf!(buf.bufv, data, ixck)
-  bufm_v = view(buf.bufm, 1:length(ixk), :)
-  mul!(bufm_v, Bjt_chunk', bufv_v)
-  out_mod_chunk .+= bufm_v
-  (-2*logdet(U.diagonals[k]), sum(_square, out_mod_chunk))
-end
-
-# This is really just for debugging.
-function nll_rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T};
-                   issue_warning=true) where{D,F,T}
-  U    = rchol(V, params; issue_warning=issue_warning)
-  data = reduce(vcat, V.data)
-  nll(U, data)
-end
-
-# So much manual indexing here. I'm sorry to anybody who tries to read this. I
-# just really wanted to keep allocations down, so I really did some grinding on
-# the logic and a lot of manual book-keeping of the indices so I could use
-# setindex! instead of push!.
-#
-# TODO (cg 2022/05/30 15:51): This is mucho serial. Which is probably best
-# because of how fast it should run for even enormous matrices. But at some
-# point should consider a parallel constructor that uses the fancy tools in the
-# Transducers ecosystem (@floop, append!!, push!!, etc) to see if a parallel
-# constructor works faster, even though it will allocate much more.
-function SparseArrays.sparse(U::RCholesky{T}) where{T}
+# TODO (cg 2025/12/15 13:16): some smarter way of indexing so that this can be
+# parallelized.
+function SparseArrays.sparse(U::RCholeskyStorage{T}) where{T}
   master_len = _nnz(U.idxs, U.condix)
   Iv = Vector{Int64}(undef, master_len)
   Jv = Vector{Int64}(undef, master_len)
@@ -292,5 +319,42 @@ function SparseArrays.sparse(U::RCholesky{T}) where{T}
     end
   end
   sparse(Iv, Jv, Vv)
+end
+
+function _rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T}; 
+                use_tiles=false) where{D,F,T}
+  out   = RCholeskyStorage_alloc(V, Val(T))
+  tiles = use_tiles ? build_tiles(V, params) : nothing
+  rchol_instantiate!(out, V, params, Val(Float64), tiles)
+end
+
+"""
+`rchol(cfg::VecchiaApproximation, params; issue_warning=true, use_tiles=false)`
+
+A method for assembling an upper-triangular matrix `U` that gives a sparse "reverse" Cholesky factor for your precision matrix. In particular, if Σ is the covariance matrix for your data, then Σ^{-1} ≈ U*U'. Permutations are handled internally and will depend on your `VecchiaApproximation`..
+
+Optional keyword arguments are:
+- `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models or approximation configurations with many redundant kernel evaluations.
+"""
+function rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T};
+               use_tiles=false) where{D,F,T}
+  out = _rchol(V, params; use_tiles=use_tiles)
+  RCholesky(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
+            Array{Float64}(undef, length(V.pts)))
+end
+
+"""
+`rchol_preconditioner(cfg::VecchiaApproximation, params; issue_warning=true, use_tiles=false)`
+
+A method for assembling a preconditioner based on the sparse reverse inverse Cholesky factorization induced by the Vecchia approximation.
+
+Optional keyword arguments are:
+- `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models or approximation configurations with many redundant kernel evaluations.
+"""
+function rchol_preconditioner(V::VecchiaApproximation{D,F}, params::AbstractVector{T};
+               use_tiles=false) where{D,F,T}
+  out = _rchol(V, params; use_tiles=use_tiles)
+  RCholeskyPreconditioner(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
+                          Array{Float64}(undef, length(V.pts)))
 end
 

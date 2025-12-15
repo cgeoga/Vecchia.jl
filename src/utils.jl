@@ -4,14 +4,6 @@ _square(x::Complex) = real(x*conj(x))
 
 _mean(x) = sum(x)/length(x)
 
-function checkthreads()::Nothing
-  nthr = Threads.nthreads()
-  if nthr > 1 && BLAS.get_num_threads() > 1
-    @warn THREAD_WARN maxlog=1
-  end
-  nothing
-end
-
 # Given data x_init that has been re-ordered to x_sorted, this gives a vector p
 # such that x_init[p] == x_sorted.
 function outer_to_inner_perm(x_init, x_sorted)
