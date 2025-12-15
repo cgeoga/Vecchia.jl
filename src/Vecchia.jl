@@ -28,6 +28,9 @@ module Vecchia
   include("extensions.jl")
   export NLPModelsSolver, vecchia_estimate, vecchia_estimate_nugget
 
+  include("predict.jl")
+  export predict
+
   #include("predict_sim.jl")
 
 end 
