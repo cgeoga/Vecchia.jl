@@ -8,14 +8,18 @@ struct CondLogLikBuf{D,T}
   buf_cpts::Vector{SVector{D,Float64}}
 end
 
-function cnllbuf(::Val{D}, ::Val{Z}, ndata, cpts_sz, pts_sz) where{D,Z}
-  buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
-  buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
-  buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
-  buf_cdat = Array{Z}(undef, cpts_sz, ndata)
-  buf_mdat = Array{Z}(undef,  pts_sz, ndata)
+function cnllbuf(V::VecchiaApproximation{D,F}, 
+                 params::AbstractVector{T}) where{D,F,T}
+  ndata    = size(V.data[1], 2)
+  pts_sz   = maximum(length, V.pts)
+  cpts_sz  = pts_sz*maximum(length, V.condix)
+  buf_pp   = Array{T}(undef,  pts_sz,  pts_sz)
+  buf_cp   = Array{T}(undef, cpts_sz,  pts_sz)
+  buf_cc   = Array{T}(undef, cpts_sz, cpts_sz)
+  buf_cdat = Array{T}(undef, cpts_sz, ndata)
+  buf_mdat = Array{T}(undef,  pts_sz, ndata)
   buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
-  CondLogLikBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
+  CondLogLikBuf(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
 end
 
 function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T}
@@ -24,15 +28,21 @@ function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T
 end
 
 function nll(V::VecchiaApproximation{D,F}, params::AbstractVector{T}) where{D,F,T}
-  n       = length(V.pts)
-  chunks  = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
-  works   = [cnllbuf(Val(D), Val(T), size(first(V.data), 2),
-                     chunksize(V)*blockrank(V), chunksize(V))
-             for _ in 1:length(chunks)]
-  logdets   = zeros(eltype(params), length(chunks))
-  qforms    = zeros(eltype(params), length(chunks))
+  n         = length(V.pts)
+  chunks    = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
+  works     = [cnllbuf(V, params) for _ in 1:length(chunks)]
   blas_nthr = BLAS.get_num_threads()
   BLAS.set_num_threads(1)
+  out = _nll(V, params, works, chunks)
+  BLAS.set_num_threads(blas_nthr)
+  out
+end
+
+function _nll(V::VecchiaApproximation{D,F}, 
+              params::AbstractVector{T},
+              works, chunks) where{D,F,T}
+  logdets = zeros(T, length(chunks))
+  qforms  = zeros(T, length(chunks))
   @sync for (j, cj) in enumerate(chunks)
     Threads.@spawn begin
       wj = works[j]
@@ -43,7 +53,6 @@ function nll(V::VecchiaApproximation{D,F}, params::AbstractVector{T}) where{D,F,
       end
     end
   end
-  BLAS.set_num_threads(blas_nthr)
   total_logdets = sum(logdets)*size(first(V.data), 2)
   total_qforms  = sum(qforms)
   (total_logdets + total_qforms)/2
@@ -82,8 +91,14 @@ function cnll_str(V::VecchiaApproximation{D,F}, j::Int,
   mul!(mdat, cov_cp', cdat, -one(T), one(T))
   # Now compute the conditional covariance matrix, reusing buffers to cut
   # out any unnecessary allocations.
-  ldiv!(cov_cc_f.U', cov_cp)
-  mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(T), one(T))
+  #
+  # TODO (cg 2025/12/16 10:27): doing this solve column-by-column is necessary
+  # to avoid a weird stray allocation here.
+  for j in 1:size(cov_cp, 2)
+    cj = view(cov_cp, :, j)
+    ldiv!(cov_cc_f.U', cj)
+  end
+  mul!(cov_pp, cov_cp', cov_cp, -one(T), one(T))
   cov_pp_cond = cholesky!(Hermitian(cov_pp))
   # compute the log-likelihood:
   negloglik(cov_pp_cond.U, mdat)
