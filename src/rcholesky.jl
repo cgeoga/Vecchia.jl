@@ -105,7 +105,7 @@ end
 function Base.display(rc::RCholeskyPreconditioner)
   println("RCholeskyPreconditioner with: ")
   println("  - size:                          $(size(rc))")
-  println("  - (Cholesky factor) nzfraction:   $(nnz(rc.U)/prod(size(rc)))")
+  println("  - (Cholesky factor) nzfraction:  $(nnz(rc.U)/prod(size(rc)))")
 end
 
 Base.size(rc::RCholeskyPreconditioner)    = size(rc.U)
@@ -130,83 +130,73 @@ function LinearAlgebra.mul!(buf::AbstractVector,
   copyto!(buf, rc.buf)
 end
 
-struct RCholeskyStorage{T}
-  diagonals::Vector{UpperTriangular{T,Matrix{T}}}
-  odiagonals::Vector{Matrix{T}}
+struct RCholeskyStorage
+  diagonals::Vector{UpperTriangular{Float64,Matrix{Float64}}}
+  odiagonals::Vector{Matrix{Float64}}
   condix::Vector{Vector{Int64}}
   idxs::Vector{UnitRange{Int64}} 
   is_instantiated::Vector{Bool}
 end
 
-function RCholApplicationBuffer(U::RCholeskyStorage{T}, ndata::Int64, ::Val{V}) where{T,V}
-  Z = promote_type(T, V)
-  m = length(U.condix)
-  out  = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
-  bufz = Array{Z}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
-  bufv = Array{Z}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
-  bufm = Array{Z}(undef, maximum(length, U.idxs), ndata)
-  RCholApplicationBuffer{Z}(bufv, bufm, bufz, out)
+function RCholApplicationBuffer(U::RCholeskyStorage, ndata::Int64)
+  m    = length(U.condix)
+  out  = Array{Float64}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufz = Array{Float64}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufv = Array{Float64}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
+  bufm = Array{Float64}(undef, maximum(length, U.idxs), ndata)
+  RCholApplicationBuffer(bufv, bufm, bufz, out)
 end
 
-struct CondRCholBuf{D,T}
-  buf_pp::Matrix{T}
-  buf_cp::Matrix{T}
-  buf_cc::Matrix{T}
+struct CondRCholBuf{D}
+  buf_pp::Matrix{Float64}
+  buf_cp::Matrix{Float64}
+  buf_cc::Matrix{Float64}
   buf_cpts::Vector{SVector{D,Float64}}
 end
 
-function crcholbuf(::Val{D}, ::Val{Z}, cpts_sz, pts_sz) where{D,Z}
-  buf_pp = Array{Z}(undef,  pts_sz,  pts_sz)
-  buf_cp = Array{Z}(undef, cpts_sz,  pts_sz)
-  buf_cc = Array{Z}(undef, cpts_sz, cpts_sz)
+function crcholbuf(::Val{D}, cpts_sz, pts_sz) where{D}
+  buf_pp = Array{Float64}(undef,  pts_sz,  pts_sz)
+  buf_cp = Array{Float64}(undef, cpts_sz,  pts_sz)
+  buf_cc = Array{Float64}(undef, cpts_sz, cpts_sz)
   buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
-  CondRCholBuf{D,Z}(buf_pp, buf_cp, buf_cc, buf_cpts)
+  CondRCholBuf{D}(buf_pp, buf_cp, buf_cc, buf_cpts)
 end
 
-function prepare_diagonal_chunks(::Val{T}, sizes) where{T}
+function prepare_diagonal_chunks(sizes)
   map(sizes) do sz
-    UpperTriangular{T, Matrix{T}}(I(sz))
+    UpperTriangular{Float64, Matrix{Float64}}(I(sz))
   end
 end
 
-function prepare_odiagonal_chunks(::Val{T}, condix, sizes) where{T}
+function prepare_odiagonal_chunks(condix, sizes)
   map(enumerate(condix)) do (j,cj)
-    isempty(cj) ? zeros(T, 0, 0) : zeros(T, sum(view(sizes, cj)), sizes[j])
+    isempty(cj) ? zeros(0, 0) : zeros(sum(view(sizes, cj)), sizes[j])
   end
 end
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
-function RCholeskyStorage_alloc(V::VecchiaApproximation{D,F}, ::Val{T}) where{D,F,T}
+function RCholeskyStorage_alloc(V::VecchiaApproximation{D,F}) where{D,F}
   szs    = map(length, V.pts)
-  diags  = prepare_diagonal_chunks(Val(T), szs)
-  odiags = prepare_odiagonal_chunks(Val(T), V.condix, szs)
-  RCholeskyStorage{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
+  diags  = prepare_diagonal_chunks(szs)
+  odiags = prepare_odiagonal_chunks(V.condix, szs)
+  RCholeskyStorage(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
-@generated function allocate_crchol_bufs(::Val{N}, ::Val{D}, ::Val{Z}, 
-                                         cpts_sz, pts_sz) where{N,D,Z}
-  quote
-    Base.Cartesian.@ntuple $N j->crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz)
-  end
+function allocate_crchol_bufs(V::VecchiaApproximation{D,F}, 
+                              cpts_sz, pts_sz) where{D,F}
+  [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:Threads.nthreads()]
 end
 
-function allocate_crchol_bufs(n::Int64, ::Val{D}, ::Val{Z}, 
-                              cpts_sz, pts_sz) where{D,Z}
-  [crcholbuf(Val(D), Val(Z), cpts_sz, pts_sz) for _ in 1:n]
-end
-
-# TODO (cg 2022/05/30 11:05): Continually look to squeeze allocations out of
-# here. Maybe I can pre-allocate things for the BLAS calls, even?
 function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,F},
-                            params::AbstractVector{T}, ::Val{Z}, tiles) where{D,F,T,Z}
-  @assert !strbuf.is_instantiated[] RCHOL_INSTANTIATE_ERROR
+                            params, tiles) where{D,F}
+  @assert !strbuf.is_instantiated[] "This routine assumes an un-instantiated RCholeskyStorage. Please allocate a new one and try again."
   strbuf.is_instantiated[] = true
   kernel  = V.kernel
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
   # allocate three buffers:
   nthr = Threads.nthreads()
-  bufs = allocate_crchol_bufs(nthr, Val(D), Val(Z), cpts_sz, pts_sz)
+  bufs = allocate_crchol_bufs(V, cpts_sz, pts_sz)
   # do the main loop:
   m = cld(length(V.condix), Threads.nthreads())
   blas_nthr = BLAS.get_num_threads()
@@ -255,8 +245,12 @@ function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,
         # out all the unnecessary allocations. If you do a manual check, you can
         # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
         cov_cc_f = cholesky!(Hermitian(cov_cc))
-        ldiv!(cov_cc_f.U', cov_cp)
-        mul!(cov_pp, adjoint(cov_cp), cov_cp, -one(Z), one(Z))
+        #ldiv!(cov_cc_f.U', cov_cp)
+        for j in 1:size(cov_cp, 2)
+          cj = view(cov_cp, :, j)
+          ldiv!(cov_cc_f.U', cj)
+        end
+        mul!(cov_pp, adjoint(cov_cp), cov_cp, -1.0, 1.0)
         ldiv!(cov_cc_f.U, cov_cp)
         Djf = cholesky!(Hermitian(cov_pp))
         # Update the struct buffers. Note that the diagonal elements are actually
@@ -270,7 +264,7 @@ function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,
         # now update the block with the rmul!, being careful to now use the
         # UpperTriangular matrix, NOT the raw buffer!
         strbuf_Bt = strbuf.odiagonals[j]
-        strbuf_Bt .*= -one(Z)
+        strbuf_Bt .*= -1.0
         rmul!(strbuf_Bt, strbuf.diagonals[j])
       end
     end
@@ -281,11 +275,11 @@ end
 
 # TODO (cg 2025/12/15 13:16): some smarter way of indexing so that this can be
 # parallelized.
-function SparseArrays.sparse(U::RCholeskyStorage{T}) where{T}
+function SparseArrays.sparse(U::RCholeskyStorage)
   master_len = _nnz(U.idxs, U.condix)
   Iv = Vector{Int64}(undef, master_len)
   Jv = Vector{Int64}(undef, master_len)
-  Vv = Vector{T}(undef, master_len)
+  Vv = Vector{Float64}(undef, master_len)
   master_ix = 1
   # Diagonal blocks. This section makes no allocations and probably can't really
   # be improved upon.
@@ -325,11 +319,10 @@ function SparseArrays.sparse(U::RCholeskyStorage{T}) where{T}
   sparse(Iv, Jv, Vv)
 end
 
-function _rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T}; 
-                use_tiles=false) where{D,F,T}
-  out   = RCholeskyStorage_alloc(V, Val(T))
+function _rchol(V::VecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+  out   = RCholeskyStorage_alloc(V)
   tiles = use_tiles ? build_tiles(V, params) : nothing
-  rchol_instantiate!(out, V, params, Val(Float64), tiles)
+  rchol_instantiate!(out, V, params, tiles)
 end
 
 """
@@ -340,8 +333,7 @@ A method for assembling an upper-triangular matrix `U` that gives a sparse "reve
 Optional keyword arguments are:
 - `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models or approximation configurations with many redundant kernel evaluations.
 """
-function rchol(V::VecchiaApproximation{D,F}, params::AbstractVector{T};
-               use_tiles=false) where{D,F,T}
+function rchol(V::VecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
   out = _rchol(V, params; use_tiles=use_tiles)
   RCholesky(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
             Array{Float64}(undef, length(V.pts)))
@@ -355,8 +347,8 @@ A method for assembling a preconditioner based on the sparse reverse inverse Cho
 Optional keyword arguments are:
 - `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models or approximation configurations with many redundant kernel evaluations.
 """
-function rchol_preconditioner(V::VecchiaApproximation{D,F}, params::AbstractVector{T};
-               use_tiles=false) where{D,F,T}
+function rchol_preconditioner(V::VecchiaApproximation{D,F},
+                              params; use_tiles=false) where{D,F}
   out = _rchol(V, params; use_tiles=use_tiles)
   RCholeskyPreconditioner(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
                           Array{Float64}(undef, length(V.pts)))

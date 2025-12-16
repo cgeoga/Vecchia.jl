@@ -46,11 +46,14 @@ function _nll(V::VecchiaApproximation{D,F},
   @sync for (j, cj) in enumerate(chunks)
     Threads.@spawn begin
       wj = works[j]
+      (_logdets, _qforms) = (0.0, 0.0)
       for k in cj
         (logdetk, qformk) = cnll_str(V, k, wj, params)
-        logdets[j] += logdetk
-        qforms[j]  += qformk
+        _logdets += logdetk
+        _qforms  += qformk
       end
+      logdets[j] = _logdets
+      qforms[j]  = _qforms
     end
   end
   total_logdets = sum(logdets)*size(first(V.data), 2)
