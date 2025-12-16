@@ -33,17 +33,18 @@ Base.adjoint(rc::RCholesky) = Adjoint{Float64, RCholesky}(rc)
 LinearAlgebra.issymmetric(rc::RCholesky) = false
 LinearAlgebra.ishermitian(rc::RCholesky) = false
 
-function LinearAlgebra.mul!(buf, rc::RCholesky, v)
+function LinearAlgebra.mul!(buf::AbstractVector, rc::RCholesky, v::AbstractVector)
   mul!(buf, rc.U, v)
   permute!(buf, rc.ip)
 end
 
-function Base.:*(rc::RCholesky, v)
+function Base.:*(rc::RCholesky, v::AbstractVector)
   buf = similar(v)
   mul!(buf, rc, v)
 end
 
-function LinearAlgebra.mul!(buf, arc::Adjoint{Float64, RCholesky}, 
+function LinearAlgebra.mul!(buf::AbstractVector, 
+                            arc::Adjoint{Float64, RCholesky}, 
                             v::AbstractVector)
   rc = arc.parent
   copyto!(rc.buf, v)
@@ -57,12 +58,13 @@ function Base.:*(arc::Adjoint{Float64, RCholesky}, v::AbstractVector)
   mul!(buf, arc, v)
 end
 
-function LinearAlgebra.ldiv!(rc::RCholesky, v)
+function LinearAlgebra.ldiv!(rc::RCholesky, v::AbstractVector)
   permute!(v, rc.p)
   ldiv!(rc.U, v)
 end
 
-function LinearAlgebra.ldiv!(buf, rc::RCholesky, v)
+function LinearAlgebra.ldiv!(buf::AbstractVector, rc::RCholesky, 
+                             v::AbstractVector)
   copyto!(buf, v)
   ldiv!(rc, buf)
 end
@@ -117,7 +119,9 @@ end
 LinearAlgebra.issymmetric(rc::RCholeskyPreconditioner) = true
 LinearAlgebra.ishermitian(rc::RCholeskyPreconditioner) = true
 
-function LinearAlgebra.mul!(buf, rc::RCholeskyPreconditioner, v::AbstractVector)
+function LinearAlgebra.mul!(buf::AbstractVector, 
+                            rc::RCholeskyPreconditioner, 
+                            v::AbstractVector)
   copyto!(rc.buf, v)
   permute!(rc.buf, rc.p)
   mul!(buf, rc.U', rc.buf)

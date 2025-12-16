@@ -52,8 +52,12 @@ end
 
 abstract type PointEnumeration end
 struct Sorted1D <: PointEnumeration end
-struct RandomOrdering <: PointEnumeration end
+struct RandomOrdering{R} <: PointEnumeration 
+  rng::R
+end
 struct NoPermutation <: PointEnumeration  end
+
+RandomOrdering() = RandomOrdering(Random.default_rng())
 
 # TODO (cg 2025/12/14 16:26): add the ChunkedPredictionSets with
 # NearestNeighbors.jl in an extension.

@@ -15,8 +15,8 @@ function permute_points_and_data(pts::Vector{SVector{1,Float64}}, data, ::Sorted
   (perm, pts_perm, data_perm)
 end
 
-function permute_points_and_data(pts, data, ::RandomOrdering)
-  perm      = Random.randperm(length(pts))
+function permute_points_and_data(pts, data, ordering::RandomOrdering)
+  perm      = Random.randperm(ordering.rng, length(pts))
   data_perm = isnothing(data) ? nothing : data[perm,:]
   pts_perm  = pts[perm]
   (perm, pts_perm, data_perm)
@@ -48,7 +48,7 @@ end
 
 function format_points_and_data(pts, data, ::SingletonPredictionSets)
   pts_str  = [[x] for x in pts]
-  data_str = isnothing(data) ? nothing : permutedims.(hcat.(eachrow(data)))
+  data_str = isnothing(data) ? nothing : permutedims.(collect.(eachrow(data))) 
   (pts_str, data_str)
 end
 

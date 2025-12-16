@@ -70,12 +70,9 @@ function split_nll_pieces(V::VecchiaApproximation{D,F}, ::Val{Z}, m) where{D,F,Z
 end
 
 function nll(V::VecchiaApproximation{D,F}, params::AbstractVector{T}) where{D,F,T}
-  nthr   = BLAS.get_num_threads()
-  BLAS.set_num_threads(1)
   ndata  = size(first(V.data), 2)
-  pieces = split_nll_pieces(V, Val(T), nthr)
+  pieces = split_nll_pieces(V, Val(T), Threads.nthreads())
   (logdets, qforms) = _nll(pieces, params) 
-  BLAS.set_num_threads(nthr)
   (logdets*ndata + qforms)/2
 end
 
@@ -83,8 +80,10 @@ end
 
 function _nll(pieces::Vector{VecchiaLikelihoodPiece{D,F,T}}, 
               params) where{D,F,T}
-  logdets = zeros(eltype(params), length(pieces))
-  qforms  = zeros(eltype(params), length(pieces))
+  logdets   = zeros(eltype(params), length(pieces))
+  qforms    = zeros(eltype(params), length(pieces))
+  blas_nthr = BLAS.get_num_threads()
+  BLAS.set_num_threads(1)
   @sync for j in eachindex(pieces)
     Threads.@spawn begin
       pj = pieces[j]
@@ -93,6 +92,7 @@ function _nll(pieces::Vector{VecchiaLikelihoodPiece{D,F,T}},
       qforms[j]  = qfj
     end
   end
+  BLAS.set_num_threads(blas_nthr)
   (sum(logdets), sum(qforms))
 end
 
