@@ -48,7 +48,7 @@ end
 
 function format_points_and_data(pts, data, ::SingletonPredictionSets)
   pts_str  = [[x] for x in pts]
-  data_str = isnothing(data) ? nothing : permutedims.(collect.(eachrow(data))) 
+  data_str = isnothing(data) ? [[NaN;;]] : permutedims.(collect.(eachrow(data))) 
   (pts_str, data_str)
 end
 

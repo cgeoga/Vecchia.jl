@@ -3,7 +3,7 @@ abstract type VecchiaApproximation{D,F} end
 
 struct ChunkedVecchiaApproximation{D,F} <: VecchiaApproximation{D,F}
   kernel::F
-  data::Union{Nothing, Vector{Matrix{Float64}}}
+  data::Vector{Matrix{Float64}} # will be a dummy placeholder if not given
   pts::Vector{Vector{SVector{D, Float64}}}
   condix::Vector{Vector{Int64}} 
   perm::Vector{Int64}
