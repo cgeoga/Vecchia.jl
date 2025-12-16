@@ -3,7 +3,6 @@
 #
 # - generalize the extra methods for AbstractMatrix as well. Just need to do a
 # little for loop for the permutations.
-
 struct RCholesky <: AbstractMatrix{Float64}
   U::UpperTriangular{Float64, SparseMatrixCSC{Float64, Int64}}
   p::Vector{Int64}
@@ -175,6 +174,10 @@ function prepare_odiagonal_chunks(condix, sizes)
 end
 
 # Just allocates all the memory for the struct. This does NOT fill in values.
+#
+# TODO (cg 2025/12/16 11:25): in the chunked case, this produces a huge number
+# of allocations because it is a ton of small matrix allocations. For the
+# SingletonVecchiaConfig, this can probably be brought down dramatically.
 function RCholeskyStorage_alloc(V::VecchiaApproximation{D,F}) where{D,F}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(szs)
@@ -187,11 +190,90 @@ function allocate_crchol_bufs(V::VecchiaApproximation{D,F},
   [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:Threads.nthreads()]
 end
 
+function _rchol_instantiate_index!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,F},
+                                   bufs, i::Int, j::Int, params, tiles) where{D,F}
+  # get the buffer for this thread:
+  tbuf = bufs[i]
+  # get the data and points:
+  idxs = V.condix[j]
+  pts  = V.pts[j]
+  cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
+  if isempty(idxs)
+    # In this special case, I actually can skip the lower triangle. 
+    if tiles isa Nothing
+      updatebuf!(cov_pp, pts, pts, V.kernel, params, skipltri=true)
+    else
+      updatebuf_tiles!(cov_pp, tiles, j, j)
+    end
+    cov_pp_f = cholesky!(Hermitian(cov_pp))
+    buf      = strbuf.diagonals[j]
+    #ldiv!(cov_pp_f.U, buf)
+    for j in 1:size(buf, 2)
+      cj = view(buf, :, j)
+      ldiv!(cov_pp_f.U, cj)
+    end
+  else
+    # If the set of conditioning points is nonempty, then I'm going to use
+    # an in-place mul! on this buffer, so I need to fill it all in.
+    if tiles isa Nothing
+      updatebuf!(cov_pp, pts, pts, V.kernel, params, skipltri=false)
+    else
+      updatebuf_tiles!(cov_pp, tiles, j, j)
+    end
+    # prepare conditioning points:
+    cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
+    # prepare and fill in the matrix buffers pertaining to the cond.  points:
+    cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
+    cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
+    if tiles isa Nothing
+      updatebuf!(cov_cc, cpts, cpts, V.kernel, params, skipltri=false)
+      updatebuf!(cov_cp, cpts,  pts, V.kernel, params, skipltri=false)
+    else
+      updatebuf_tiles!(cov_cc, tiles, idxs, idxs)
+      updatebuf_tiles!(cov_cp, tiles, idxs, j)
+    end
+    # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
+    # pieces, like the conditional covaraince of the prediction points. I
+    # acknowledge that this is a little hard to read, but it really nicely cuts
+    # out all the unnecessary allocations. If you do a manual check, you can
+    # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
+    cov_cc_f = cholesky!(Hermitian(cov_cc))
+    #ldiv!(cov_cc_f.U', cov_cp)
+    for j in 1:size(cov_cp, 2)
+      cj = view(cov_cp, :, j)
+      ldiv!(cov_cc_f.U', cj)
+    end
+    mul!(cov_pp, adjoint(cov_cp), cov_cp, -1.0, 1.0)
+    #ldiv!(cov_cc_f.U, cov_cp)
+    for j in 1:size(cov_cp, 2)
+      cj = view(cov_cp, :, j)
+      ldiv!(cov_cc_f.U, cj)
+    end
+    Djf = cholesky!(Hermitian(cov_pp))
+    # Update the struct buffers. Note that the diagonal elements are actually
+    # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
+    # hack of directly working with the data buffer backing the UpperTriangular
+    # wrapper, which is probably not really recommended, but it works.
+    #strbuf.odiagonals[j] .= Bt_chunks
+    strbuf.odiagonals[j] .= cov_cp
+    strbuf_Djf = strbuf.diagonals[j].data
+    #ldiv!(Djf.U, strbuf_Djf)
+    for j in 1:size(strbuf_Djf, 2)
+      cj = view(strbuf_Djf, :, j)
+      ldiv!(Djf.U, cj)
+    end
+    # now update the block with the rmul!, being careful to now use the
+    # UpperTriangular matrix, NOT the raw buffer!
+    strbuf_Bt = strbuf.odiagonals[j]
+    strbuf_Bt .*= -1.0
+    rmul!(strbuf_Bt, strbuf.diagonals[j])
+  end
+end
+
 function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,F},
                             params, tiles) where{D,F}
   @assert !strbuf.is_instantiated[] "This routine assumes an un-instantiated RCholeskyStorage. Please allocate a new one and try again."
   strbuf.is_instantiated[] = true
-  kernel  = V.kernel
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
   # allocate three buffers:
@@ -201,72 +283,11 @@ function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,
   m = cld(length(V.condix), Threads.nthreads())
   blas_nthr = BLAS.get_num_threads()
   BLAS.set_num_threads(1)
-  @sync for (i, chunk) in enumerate(Iterators.partition(1:length(V.condix), m))
+  chunks = collect(Iterators.partition(1:length(V.condix), m))
+  @sync for (i, chunk) in enumerate(chunks)
     Threads.@spawn for j in chunk
-      # get the buffer for this thread:
-      tbuf = bufs[i]
-      # get the data and points:
-      idxs = V.condix[j]
-      pts  = V.pts[j]
-      cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
-      if isempty(idxs)
-        # In this special case, I actually can skip the lower triangle. 
-        if tiles isa Nothing
-          updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=true)
-        else
-          updatebuf_tiles!(cov_pp, tiles, j, j)
-        end
-        cov_pp_f = cholesky!(Hermitian(cov_pp))
-        buf      = strbuf.diagonals[j]
-        ldiv!(cov_pp_f.U, buf)
-      else
-        # If the set of conditioning points is nonempty, then I'm going to use
-        # an in-place mul! on this buffer, so I need to fill it all in.
-        if tiles isa Nothing
-          updatebuf!(cov_pp, pts, pts, kernel, params, skipltri=false)
-        else
-          updatebuf_tiles!(cov_pp, tiles, j, j)
-        end
-        # prepare conditioning points:
-        cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
-        # prepare and fill in the matrix buffers pertaining to the cond.  points:
-        cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
-        cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
-        if tiles isa Nothing
-          updatebuf!(cov_cc, cpts, cpts, kernel, params, skipltri=false)
-          updatebuf!(cov_cp, cpts,  pts, kernel, params, skipltri=false)
-        else
-          updatebuf_tiles!(cov_cc, tiles, idxs, idxs)
-          updatebuf_tiles!(cov_cp, tiles, idxs, j)
-        end
-        # pre-factorize the cpts:cpts marginal matrix, then get the two remaining
-        # pieces, like the conditional covaraince of the prediction points. I
-        # acknowledge that this is a little hard to read, but it really nicely cuts
-        # out all the unnecessary allocations. If you do a manual check, you can
-        # confirm that cov_pp becomes the conditional covariance of pts | cpts, etc.
-        cov_cc_f = cholesky!(Hermitian(cov_cc))
-        #ldiv!(cov_cc_f.U', cov_cp)
-        for j in 1:size(cov_cp, 2)
-          cj = view(cov_cp, :, j)
-          ldiv!(cov_cc_f.U', cj)
-        end
-        mul!(cov_pp, adjoint(cov_cp), cov_cp, -1.0, 1.0)
-        ldiv!(cov_cc_f.U, cov_cp)
-        Djf = cholesky!(Hermitian(cov_pp))
-        # Update the struct buffers. Note that the diagonal elements are actually
-        # UpperTriangular, and I am not supposed to mutate those. But we do the ugly
-        # hack of directly working with the data buffer backing the UpperTriangular
-        # wrapper, which is probably not really recommended, but it works.
-        #strbuf.odiagonals[j] .= Bt_chunks
-        strbuf.odiagonals[j] .= cov_cp
-        strbuf_Djf = strbuf.diagonals[j].data
-        ldiv!(Djf.U, strbuf_Djf)
-        # now update the block with the rmul!, being careful to now use the
-        # UpperTriangular matrix, NOT the raw buffer!
-        strbuf_Bt = strbuf.odiagonals[j]
-        strbuf_Bt .*= -1.0
-        rmul!(strbuf_Bt, strbuf.diagonals[j])
-      end
+      # confirmed non-allocating.
+      _rchol_instantiate_index!(strbuf, V, bufs, i, j, params, tiles)
     end
   end
   BLAS.set_num_threads(blas_nthr)
