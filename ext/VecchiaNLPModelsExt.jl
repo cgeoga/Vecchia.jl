@@ -20,7 +20,6 @@ module VecchiaNLPModelsExt
 
   function NLPModels.obj(vnlp::VecchiaNLPModel{C,T,S}, x) where{C,T,S}
     return try
-      #vnlp.cfg(x)
       Vecchia._primal(vnlp.cfg, x)
     catch
       NaN
@@ -29,7 +28,6 @@ module VecchiaNLPModelsExt
 
   function NLPModels.grad!(vnlp::VecchiaNLPModel{C,T,S}, x, g) where{C,T,S}
     _g = try
-      #ForwardDiff.gradient(vnlp.cfg, x)
       Vecchia._gradient(vnlp.cfg, x)
     catch
       fill(NaN, length(x))
@@ -55,7 +53,6 @@ module VecchiaNLPModelsExt
                                  hvals::AbstractVector{Float64}; 
                                  obj_weight=1) where{C,T,S}
     _h = try
-      #ForwardDiff.hessian(vnlp.cfg, x)
       Vecchia._hessian(vnlp.cfg, x)
     catch
       fill(NaN, (length(x), length(x)))

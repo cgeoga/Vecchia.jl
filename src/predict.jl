@@ -81,11 +81,10 @@ end
 
 function predict(vp::VecchiaPrediction{D,F}, params; 
                  conditional_simulate=false) where{D,F}
-  jva = ChunkedVecchiaApproximation(vp.kernel, nothing, [[x] for x in vp.joint_pts],
+  jva = ChunkedVecchiaApproximation(vp.kernel, [[NaN;;]], [[x] for x in vp.joint_pts],
                                     vp.joint_condix, Int64[])
   ixs     = (vp.n+1):length(vp.joint_pts)
-  _U      = rchol(jva, params; issue_warning=false, use_tiles=true)
-  U       = UpperTriangular(sparse(_U))
+  U       = rchol(jva, params; use_tiles=true).U
   U_cross = U[(1:vp.n),ixs]
   U_pred  = UpperTriangular(U[ixs, ixs])
   z       = -U_cross'*vp.data[1:vp.n, :]

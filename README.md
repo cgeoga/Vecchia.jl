@@ -1,12 +1,6 @@
 
 # Vecchia.jl
 
-**Note:** this package is undergoing an extensive rewrite on the `main` branch.
-This README is at the time of writing up-to-date on the interface, but until
-`v0.11` is released, please be mindful that this README is subject to big
-changes and should not be what you use for documentation. I apologize for the
-inconvenience and hope to tag the release soon.
-
 This package offers a flexible and optimized framework for fitting parametric
 Gaussian process models to large datasets using the linear-cost [*Vecchia
 approximation*](https://en.wikipedia.org/wiki/Vecchia_approximation). This
