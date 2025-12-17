@@ -1,6 +1,6 @@
 name = "Vecchia"
 uuid = "8d73829f-f4b0-474a-9580-cecc8e084068"
-version = "0.11.0"
+version = "0.11.1"
 authors = ["Chris Geoga <geoga@wisc.edu>"]
 
 [deps]
