@@ -68,7 +68,7 @@ module VecchiaNLPModelsExt
     hvals
   end
 
-  function Vecchia.optimize(obj, init, solver::Vecchia.NLPModelsSolver, 
+  function Vecchia.optimize(obj, init, solver::Vecchia.NLPModelsSolver;
                             box_lower=fill(0.0, length(init)),
                             box_upper=fill(Inf, length(init)))
     nlp = Vecchia.nlp(obj, init, box_lower=box_lower, box_upper=box_upper)

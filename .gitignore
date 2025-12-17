@@ -13,6 +13,7 @@ examples/Manifest.toml
 test/Mainfest.toml
 debug*.jl
 dev*.jl
+devel
 paperscripts/EM/plotting/*.tex
 paperscripts/EM/plotting/*.eps
 !paperscripts/EM/data/lidar_highalt.csv
