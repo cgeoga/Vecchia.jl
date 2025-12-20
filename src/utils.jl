@@ -170,3 +170,11 @@ end
 check_canonical_sorted(pts) = false
 check_canonical_sorted(pts::Vector{SVector{1,Float64}}) = issorted(getindex.(pts, 1))
 
+function fastknn_routine_available(pts::Vector{SVector{D,Float64}}, 
+                                   design::KNNConditioning{M}) where{D,M}
+  sequentialknn_jll.is_available() || return false
+  in(D, (2,3,4)) || return false
+  M == Euclidean || return false
+  true
+end
+

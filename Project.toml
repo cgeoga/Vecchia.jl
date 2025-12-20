@@ -1,33 +1,35 @@
 name = "Vecchia"
 uuid = "8d73829f-f4b0-474a-9580-cecc8e084068"
-version = "0.11.1"
+version = "0.11.2"
 authors = ["Chris Geoga <geoga@wisc.edu>"]
 
 [deps]
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-HNSW = "540f64fa-c57e-11e8-081c-41422cda4629"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+sequentialknn_jll = "a3d66c5c-fa88-5e7c-8b67-86d01549c065"
 
 [weakdeps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+HNSW = "540f64fa-c57e-11e8-081c-41422cda4629"
 NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 UnoSolver = "1baa60ac-02f7-4b39-a7a8-2f4f58486b05"
 
 [extensions]
 VecchiaForwardDiffExt = ["ForwardDiff"]
+VecchiaHNSWExt = ["HNSW"]
 VecchiaNLPModelsExt = ["NLPModels", "ForwardDiff"]
 VecchiaUnoSolverExt = ["NLPModels", "ForwardDiff", "UnoSolver"]
 
 [compat]
 Distances = "0.10.12"
-HNSW = "0.1.5"
 NLPModels = "0.21.6"
 Printf = "1.11.0"
 Random = "1.11.0"
 StaticArrays = "1"
 UnoSolver = "0.1.7"
 julia = "1"
+sequentialknn_jll = "0.1.0"
