@@ -126,29 +126,36 @@ function cnll_str(V::ChunkedVecchiaApproximation{D,F}, j::Int,
   negloglik(cov_pp_cond.U, mdat)
 end
 
-function cnll_str(V::SingletonVecchiaApproximation{D,F}, j::Int,
-                  strbuf::SingletonCondLogLikBuf{T},
-                  params::AbstractVector{T}) where{D,F,T}
+# pulling this functionality out because it can be reused in the simpler rchol
+# in the singleton case.
+function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
+                              V::SingletonVecchiaApproximation{D,F},
+                              params::AbstractVector{T}) where{D,F,T}
   ptj   = V.pts[j]
-  idxs  = V.condix[j]
   covjj = V.kernel(ptj, ptj, params)
-  isempty(idxs) && return (log(covjj), sum(abs2, view(V.data, j, :))/covjj)
-  # prepare and update buffers as necessary:
+  idxs  = V.condix[j]
+  isempty(idxs) && return covjj
   cpts   = view(V.pts, idxs)
   cov_cc = view(strbuf.buf_cc,   1:length(idxs), 1:length(idxs))
   cov_cp = view(strbuf.buf_cp,   1:length(idxs))
   kwts   = view(strbuf.buf_kwts, 1:length(idxs))
   updatebuf!(cov_cc, cpts, V.kernel, params)
   updatebuf!(cov_cp, cpts, ptj, V.kernel, params)
-  # factorize the conditioning covariance matrix and compute the Kriging weights
-  # for the prediction problem:
   cov_cc_f = cholesky!(Symmetric(cov_cc))
-  copyto!(kwts, cov_cp)
-  ldiv!(cov_cc_f, kwts)
-  # compute the conditional variance:
-  cvar  = covjj - dot(cov_cp, kwts)
+  ldiv!(kwts, cov_cc_f, cov_cp)
+  covjj - dot(kwts, cov_cp)
+end
+
+
+function cnll_str(V::SingletonVecchiaApproximation{D,F}, j::Int,
+                  strbuf::SingletonCondLogLikBuf{T},
+                  params::AbstractVector{T}) where{D,F,T}
+  ptj   = V.pts[j]
+  idxs  = V.condix[j]
+  cvar  = prepare_conditional!(strbuf, j, V, params)
+  isempty(idxs) && return (log(cvar), sum(abs2, view(V.data, j, :))/cvar)
   icvar = inv(cvar)
-  # compute the quadratic forms. 
+  kwts  = view(strbuf.buf_kwts, 1:length(idxs))
   qforms = sum(1:size(V.data, 2)) do k
     icvar*(V.data[j,k] - dot(view(V.data, idxs, k), kwts))^2
   end

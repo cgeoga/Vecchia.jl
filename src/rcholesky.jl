@@ -178,19 +178,19 @@ end
 # TODO (cg 2025/12/16 11:25): in the chunked case, this produces a huge number
 # of allocations because it is a ton of small matrix allocations. For the
 # SingletonVecchiaConfig, this can probably be brought down dramatically.
-function RCholeskyStorage_alloc(V::VecchiaApproximation{D,F}) where{D,F}
+function RCholeskyStorage_alloc(V::ChunkedVecchiaApproximation{D,F}) where{D,F}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(szs)
   odiags = prepare_odiagonal_chunks(V.condix, szs)
   RCholeskyStorage(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
-function allocate_crchol_bufs(V::VecchiaApproximation{D,F}, 
+function allocate_crchol_bufs(V::ChunkedVecchiaApproximation{D,F}, 
                               cpts_sz, pts_sz) where{D,F}
   [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:Threads.nthreads()]
 end
 
-function _rchol_instantiate_index!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,F},
+function _rchol_instantiate_index!(strbuf::RCholeskyStorage, V::ChunkedVecchiaApproximation{D,F},
                                    bufs, i::Int, j::Int, params, tiles) where{D,F}
   # get the buffer for this thread:
   tbuf = bufs[i]
@@ -270,7 +270,7 @@ function _rchol_instantiate_index!(strbuf::RCholeskyStorage, V::VecchiaApproxima
   end
 end
 
-function rchol_instantiate!(strbuf::RCholeskyStorage, V::VecchiaApproximation{D,F},
+function rchol_instantiate!(strbuf::RCholeskyStorage, V::ChunkedVecchiaApproximation{D,F},
                             params, tiles) where{D,F}
   @assert !strbuf.is_instantiated[] "This routine assumes an un-instantiated RCholeskyStorage. Please allocate a new one and try again."
   strbuf.is_instantiated[] = true
@@ -340,10 +340,64 @@ function SparseArrays.sparse(U::RCholeskyStorage)
   sparse(Iv, Jv, Vv)
 end
 
-function _rchol(V::VecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+function _rchol(V::ChunkedVecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
   out   = RCholeskyStorage_alloc(V)
   tiles = use_tiles ? build_tiles(V, params) : nothing
   rchol_instantiate!(out, V, params, tiles)
+end
+
+function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{D,F},
+                           buffers, chunks, params, vixs) where{D,F}
+  @sync for (i, chunk) in enumerate(chunks)
+    Threads.@spawn begin
+      bufi = buffers[i]
+      for j in chunk
+        valj = view(valbuf, vixs[j])
+        cvar = Vecchia.prepare_conditional!(bufi, j, V, params)
+        idxs = V.condix[j]
+        if isempty(idxs)
+          valj[1] = inv(sqrt(cvar))
+        else
+          kwts = view(bufi.buf_kwts, 1:length(idxs))
+          isqrt_cvar = inv(sqrt(cvar))
+          kwts .*= -isqrt_cvar
+          view(valj, 1:(length(valj)-1)) .= kwts
+          valj[end] = isqrt_cvar
+        end
+      end
+    end
+  end
+  nothing
+end
+
+function _rchol(V::SingletonVecchiaApproximation{D,F}, params) where{D,F}
+  n   = length(V.pts)
+  # pre-allocate the COO format (I,J,V), like the output from findnz(sparse_matrix).
+  nnz = sum(length, V.condix) + length(V.condix)
+  IJ  = Vector{Tuple{Int64, Int64}}()
+  sizehint!(IJ, nnz)
+  for (j, cj) in enumerate(V.condix)
+    for k in cj
+      push!(IJ, (k, j))
+    end
+    push!(IJ, (j,j))
+  end
+  (I, J)   = (getindex.(IJ, 1), getindex.(IJ, 2))
+  vals     = Vector{Float64}(undef, nnz)
+  view_ixs = Vector{UnitRange{Int64}}()
+  sizehint!(view_ixs, length(V.condix))
+  current_ix = 1
+  for (j, cj) in enumerate(V.condix)
+    cix = current_ix:(current_ix + length(cj))
+    push!(view_ixs, cix)
+    current_ix = cix[end]+1
+  end
+  # split the work into chunks and pre-allocate work buffers.
+  chunks  = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
+  buffers = [cnllbuf(V, params) for _ in 1:length(chunks)]
+  # with everything allocated, hand to the non-allocating routine.
+  _rchol_singleton!(vals, V, buffers, chunks, params, view_ixs)
+  UpperTriangular(sparse(I, J, vals))
 end
 
 """
@@ -354,9 +408,18 @@ A method for assembling an upper-triangular matrix `U` that gives a sparse "reve
 Optional keyword arguments are:
 - `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models or approximation configurations with many redundant kernel evaluations.
 """
-function rchol(V::VecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+function rchol end
+
+function rchol(V::ChunkedVecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
   out = _rchol(V, params; use_tiles=use_tiles)
   RCholesky(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
+            Array{Float64}(undef, length(V.pts)))
+end
+
+function rchol(V::SingletonVecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+  use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
+  out = _rchol(V, params)
+  RCholesky(out, V.perm, invperm(V.perm),
             Array{Float64}(undef, length(V.pts)))
 end
 
@@ -368,10 +431,20 @@ A method for assembling a preconditioner based on the sparse reverse inverse Cho
 Optional keyword arguments are:
 - `use_tiles` is an option to pre-compute block covariances and store them. This can potentially speed up assembly in stationary models or approximation configurations with many redundant kernel evaluations.
 """
-function rchol_preconditioner(V::VecchiaApproximation{D,F},
+function rchol_preconditioner end
+
+function rchol_preconditioner(V::ChunkedVecchiaApproximation{D,F},
                               params; use_tiles=false) where{D,F}
   out = _rchol(V, params; use_tiles=use_tiles)
   RCholeskyPreconditioner(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
+                          Array{Float64}(undef, length(V.pts)))
+end
+
+function rchol_preconditioner(V::SingletonVecchiaApproximation{D,F},
+                              params; use_tiles=false) where{D,F}
+  use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
+  out = _rchol(V, params)
+  RCholeskyPreconditioner(out, V.perm, invperm(V.perm),
                           Array{Float64}(undef, length(V.pts)))
 end
 
