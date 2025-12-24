@@ -25,7 +25,7 @@ end
 # be so simple?
 struct SingletonVecchiaApproximation{D,F} <: VecchiaApproximation{D,F}
   kernel::F
-  data::Union{Nothing, Matrix{Float64}}
+  data::Union{Nothing, Matrix{Float64}} 
   pts::Vector{SVector{D, Float64}}
   condix::Vector{Vector{Int64}} 
   perm::Vector{Int64}
@@ -38,8 +38,7 @@ function Base.display(V::ChunkedVecchiaApproximation)
 end
 
 function Base.display(V::SingletonVecchiaApproximation)
-  println("Chunked Vecchia configuration with:")
-  println("  - prediction set size:   $(chunksize(V))")
+  println("Singleton Vecchia configuration with:")
   println("  - conditioning set size: $(blockrank(V))")
 end
 

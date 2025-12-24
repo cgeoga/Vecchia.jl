@@ -88,3 +88,14 @@ function VecchiaApproximation(pts::Vector{SVector{D,Float64}},
   ChunkedVecchiaApproximation(kernel, data_str, pts_str, condix, perm)
 end
 
+function temporary(pts::Vector{SVector{D,Float64}},
+                              kernel::K,
+                              data=nothing;
+                              ordering=default_ordering(pts),
+                              predictionsets=default_predictionsets(),
+                              conditioning=default_conditioning(pts)) where{D,K}
+  (perm, pts_perm, data_perm) = permute_points_and_data(pts, data, ordering)
+  condix = conditioningsets(pts_perm, conditioning)
+  SingletonVecchiaApproximation(kernel, hcat(data_perm), pts_perm, condix, perm)
+end
+

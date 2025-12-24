@@ -1,4 +1,7 @@
 
+n_data_samples(V::ChunkedVecchiaApproximation)   = size(first(V.data), 2)
+n_data_samples(V::SingletonVecchiaApproximation) = size(V.data, 2)
+
 _square(x::Real) = x*x
 _square(x::Complex) = real(x*conj(x))
 
@@ -16,7 +19,7 @@ end
 inner_to_outer_perm(x_init, x_sorted) = invperm(outer_to_inner_perm(x_init, x_sorted))
 
 blockrank(cfg::VecchiaApproximation) = maximum(length, cfg.condix)
-chunksize(cfg::VecchiaApproximation) = maximum(length, cfg.pts)
+chunksize(cfg::ChunkedVecchiaApproximation) = maximum(length, cfg.pts)
 
 function check_singleton_sets(cfg::VecchiaApproximation)
   if chunksize(cfg) > 1
@@ -28,6 +31,17 @@ end
 # number of elements in the lower triangle of an n x n matrix.
 ltrisz(n) = div(n*(n+1), 2)
 
+function updatebuf!(buf::AbstractMatrix, pts::AbstractVector{SVector{D,Float64}},
+                    kfun::F, params) where{D,F}
+  for k in eachindex(pts)
+    for j in 1:k
+      buf[j,k] = kfun(pts[j], pts[k], params)
+      buf[k,j] = buf[j,k]
+    end
+  end
+  nothing
+end
+
 # Update kernel matrix buffer, exploiting redundancy for symmetric case. Not
 # necessarily faster unless the kernel is very expensive to evaluate, but not
 # slower in any case in my experimentation.
@@ -35,30 +49,48 @@ ltrisz(n) = div(n*(n+1), 2)
 # Note that this does _NOT_ use threads, since I am already assuming that the
 # nll function itself will be using threads, and in my benchmarking putting
 # threaded constructors here slows things down a bit and increases allocations.
-function updatebuf!(buf, pts1, pts2, kfun::F, params; skipltri=false) where{F}
+function updatebuf!(buf::AbstractMatrix, 
+                    pts1::AbstractVector{SVector{D,Float64}}, 
+                    pts2::AbstractVector{SVector{D,Float64}}, 
+                    kfun::F, params; skipltri=false) where{D,F}
+  @inbounds begin
   if pts1 == pts2 && skipltri
     for k in eachindex(pts2)
       ptk = pts2[k]
-      @inbounds buf[k,k] = kfun(ptk, ptk, params)
-      @inbounds for j in 1:(k-1)
+      buf[k,k] = kfun(ptk, ptk, params)
+      for j in 1:(k-1)
         buf[j,k] = kfun(pts1[j], ptk, params)
       end
     end
   elseif pts1 == pts2 && !skipltri
     for k in eachindex(pts2)
       ptk = pts2[k]
-      @inbounds buf[k,k] = kfun(ptk, ptk, params)
-      @inbounds for j in 1:(k-1)
+      buf[k,k] = kfun(ptk, ptk, params)
+      for j in 1:(k-1)
         buf[j,k] = kfun(pts1[j], ptk, params)
-        buf[k,j] = kfun(pts1[j], ptk, params)
+        buf[k,j] = buf[j,k] 
       end
     end
   else
-    @inbounds for k in eachindex(pts2), j in eachindex(pts1) 
+    for k in eachindex(pts2), j in eachindex(pts1) 
       buf[j,k] = kfun(pts1[j], pts2[k], params)
     end
   end
+  end
   nothing
+end
+
+function updatebuf!(buf::AbstractVector, ptsv::AbstractVector{P}, pt::P, 
+                    kfun::F, params) where{P,F}
+  @inbounds for j in eachindex(buf, ptsv)
+    buf[j] = kfun(ptsv[j], pt, params)
+  end
+  nothing
+end
+
+function updatebuf!(buf::AbstractVector, pt::P, ptsv::AbstractVector{P}, 
+                    kfun::F, params) where{P,F}
+  updatebuf!(buf, ptsv, pt, kfun, params)
 end
 
 function updatebuf_tiles!(buf, tiles, jv, kv)
@@ -87,7 +119,7 @@ function prepare_v_buf!(buf, v, idxv)
   view(buf, 1:(_ix-1), :)
 end
 
-function updateptsbuf!(ptbuf, ptvv, idxs)
+function updateptsbuf!(ptbuf::Vector{T}, ptvv::Vector{Vector{T}}, idxs) where{T}
   ix = 1
   for idx in idxs
     for pt in ptvv[idx]
@@ -96,6 +128,13 @@ function updateptsbuf!(ptbuf, ptvv, idxs)
     end
   end
   view(ptbuf, 1:(ix-1))
+end
+
+function updateptsbuf!(ptbuf::Vector{T}, ptv::Vector{T}, idxs) where{T}
+  for (j, idx) in enumerate(idxs)
+    ptbuf[j] = ptv[idx]
+  end
+  view(ptbuf, 1:length(idxs))
 end
 
 function updatedatbuf!(datbuf, datvm, idxs)

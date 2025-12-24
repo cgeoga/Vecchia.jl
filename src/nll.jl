@@ -1,5 +1,5 @@
 
-struct CondLogLikBuf{D,T}
+struct ChunkedCondLogLikBuf{D,T}
   buf_pp::Matrix{T}
   buf_cp::Matrix{T}
   buf_cc::Matrix{T}
@@ -8,7 +8,7 @@ struct CondLogLikBuf{D,T}
   buf_cpts::Vector{SVector{D,Float64}}
 end
 
-function cnllbuf(V::VecchiaApproximation{D,F}, 
+function cnllbuf(V::ChunkedVecchiaApproximation{D,F}, 
                  params::AbstractVector{T}) where{D,F,T}
   ndata    = size(V.data[1], 2)
   pts_sz   = maximum(length, V.pts)
@@ -19,7 +19,25 @@ function cnllbuf(V::VecchiaApproximation{D,F},
   buf_cdat = Array{T}(undef, cpts_sz, ndata)
   buf_mdat = Array{T}(undef,  pts_sz, ndata)
   buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
-  CondLogLikBuf(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
+  ChunkedCondLogLikBuf(buf_pp, buf_cp, buf_cc, buf_cdat, buf_mdat, buf_cpts)
+end
+
+# unlike in the chunked case, the pre-allocation here is _much_ simpler.
+# Allocating for the Kriging weights isn't strictly necessary if you're clever,
+# but I think allocating an extra 10 Float64s won't break the bank.
+struct SingletonCondLogLikBuf{T}
+  buf_cc::Matrix{T}
+  buf_cp::Vector{T}
+  buf_kwts::Vector{T}
+end
+
+function cnllbuf(V::SingletonVecchiaApproximation{D,F},
+                 params::AbstractVector{T}) where{D,F,T}
+  cpts_sz  = maximum(length, V.condix)
+  buf_cc   = Matrix{T}(undef, (cpts_sz, cpts_sz))
+  buf_cp   = Vector{T}(undef, cpts_sz)
+  buf_kwts = Vector{T}(undef, cpts_sz)
+  SingletonCondLogLikBuf(buf_cc, buf_cp, buf_kwts)
 end
 
 function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T}
@@ -27,7 +45,8 @@ function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T
   (2*logdet(U), sum(_square, y_mut_allowed))
 end
 
-function nll(V::VecchiaApproximation{D,F}, params::AbstractVector{T}) where{D,F,T}
+function nll(V::VecchiaApproximation{D,F}, 
+             params::AbstractVector{T}) where{D,F,T}
   n         = length(V.pts)
   chunks    = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
   works     = [cnllbuf(V, params) for _ in 1:length(chunks)]
@@ -56,15 +75,15 @@ function _nll(V::VecchiaApproximation{D,F},
       qforms[j]  = _qforms
     end
   end
-  total_logdets = sum(logdets)*size(first(V.data), 2)
+  total_logdets = sum(logdets)*n_data_samples(V)
   total_qforms  = sum(qforms)
   (total_logdets + total_qforms)/2
 end
 
 (V::VecchiaApproximation{D,F})(p) where{D,F} = nll(V, p)
 
-function cnll_str(V::VecchiaApproximation{D,F}, j::Int, 
-                  strbuf::CondLogLikBuf{D,T}, params) where{D,F,T}
+function cnll_str(V::ChunkedVecchiaApproximation{D,F}, j::Int, 
+                  strbuf::ChunkedCondLogLikBuf{D,T}, params) where{D,F,T}
   # prepare the marginal points and buffer:
   pts    = V.pts[j]
   dat    = V.data[j]
@@ -84,7 +103,7 @@ function cnll_str(V::VecchiaApproximation{D,F}, j::Int,
   # prepare and fill in the matrix buffers pertaining to the cond.  points:
   cov_cp = view(strbuf.buf_cp, 1:length(cpts), 1:length(pts))
   cov_cc = view(strbuf.buf_cc, 1:length(cpts), 1:length(cpts))
-  updatebuf!(cov_cc, cpts, cpts, V.kernel, params, skipltri=true)
+  updatebuf!(cov_cc, cpts, cpts, V.kernel, params, skipltri=false)
   updatebuf!(cov_cp, cpts,  pts, V.kernel, params, skipltri=false)
   # Factorize the covariance matrix for the conditioning points:
   cov_cc_f = cholesky!(Hermitian(cov_cc))
@@ -105,5 +124,34 @@ function cnll_str(V::VecchiaApproximation{D,F}, j::Int,
   cov_pp_cond = cholesky!(Hermitian(cov_pp))
   # compute the log-likelihood:
   negloglik(cov_pp_cond.U, mdat)
+end
+
+function cnll_str(V::SingletonVecchiaApproximation{D,F}, j::Int,
+                  strbuf::SingletonCondLogLikBuf{T},
+                  params::AbstractVector{T}) where{D,F,T}
+  ptj   = V.pts[j]
+  idxs  = V.condix[j]
+  covjj = V.kernel(ptj, ptj, params)
+  isempty(idxs) && return (log(covjj), sum(abs2, view(V.data, j, :))/covjj)
+  # prepare and update buffers as necessary:
+  cpts   = view(V.pts, idxs)
+  cov_cc = view(strbuf.buf_cc,   1:length(idxs), 1:length(idxs))
+  cov_cp = view(strbuf.buf_cp,   1:length(idxs))
+  kwts   = view(strbuf.buf_kwts, 1:length(idxs))
+  updatebuf!(cov_cc, cpts, V.kernel, params)
+  updatebuf!(cov_cp, cpts, ptj, V.kernel, params)
+  # factorize the conditioning covariance matrix and compute the Kriging weights
+  # for the prediction problem:
+  cov_cc_f = cholesky!(Symmetric(cov_cc))
+  copyto!(kwts, cov_cp)
+  ldiv!(cov_cc_f, kwts)
+  # compute the conditional variance:
+  cvar  = covjj - dot(cov_cp, kwts)
+  icvar = inv(cvar)
+  # compute the quadratic forms. 
+  qforms = sum(1:size(V.data, 2)) do k
+    icvar*(V.data[j,k] - dot(view(V.data, idxs, k), kwts))^2
+  end
+  (log(cvar), qforms)
 end
 
