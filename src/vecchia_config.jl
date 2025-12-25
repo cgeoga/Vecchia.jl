@@ -95,9 +95,23 @@ Keyword arguments, which specify details of the approximation, are:
 - `ordering::PointEnumeration`: an option indicating how, if at all, you would like points to be reordered. The default option is `RandomOrdering()` in 2+D and canonical sorting in 1D, but there is also `NoPermutation()`. Extensions may provide additional routines.
 - `predictionsets::PredictionSetDesign`: an option indicating whether you want to predict single values (`SingletonPredictionSets()`, the default) or chunked prediction sets (not currently available, as legacy code has been removed but not yet ported to an extension).
 - `conditioning::ConditioningSetDesign`: an option indicating how you want to determine conditioning sets. The default is `KNNConditioningSets(10)`. Additional methods may be made available via package extensions.
+
+After it is created, it also is a functor that can be used to evaluate the approximate. You have two options for doing so. If `appx::VecchiaApproximation` is your specified model, then you can evaluate it with
+
+```julia
+appx(params::Vector{Float64}) # both mean and covariance functions get the whole parameter vector
+appx(params::Vector{Float64}; cov_param_ixs, mean_param_ixs) # mean gets `params[mean_param_ixs]`, similar for cov. fun.
+```
+
+These options are specifcally so that you can choose to manually handle parameter indexing of one big vector in your mean and covariance function (as in, one of those functions presumably isn't using indices `1:something`) or choose to split them up so that each function can use one-based indexing with the parameters.
 """
 function VecchiaApproximation end
 
+"""
+`Parameters(;cov_params, mean_params)`
+
+This is an optional structure for you to specify mean and covariance function parameters separately and hand that information to the `vecchia_estimate` routine via the `init` argument. It is entirely optional, and you can instead also pass in `init::Vector{Float64}`---but then you will be responsible for making sure that the mean and covariance functions index the raw flat parameter vector appropriately.
+"""
 Base.@kwdef struct Parameters
   cov_params::Vector{Float64}
   mean_params::Vector{Float64}

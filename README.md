@@ -20,7 +20,7 @@ library offers several features that set it apart from others in the space:
 - Because of how great the Julia optimization ecosystem is, you can hook into
   *much* more powerful optimizers than is possible in, for example, R.
 
-## Simple usage demonstration
+## Simple usage demonstration (mean zero)
 
 If you have data `data` measured at locations `pts::Vector{SVector{D,Float64}}`
 and you want to fit the parameters of covariance function `kernel(pt_1, pt_2, params)`, 
@@ -51,7 +51,32 @@ preds  = predict(appx, prediction_pts, mle)
 It's that easy! Enjoy your linear-cost (approximate) MLEs, predictions,
 conditional simulations, preconditioners, and more.
 
-**See the example files for heavily commented demonstrations.**
+If you have a mean function, you have two options. You can write your functions
+with
+```julia
+covfun(x, y, params) = # uses params[1:whatever]
+meanfun(x, params)   = # manually uses params[(whatever+1):end]
+```
+in which case you can just modify your approximation constructor with
+```julia
+appx = VecchiaApproximation(pts, kernel, data; meanfun=meanfun)
+```
+and hand everything to the optimizer and get a `Vector{Float64}` back as usual.
+Alternatively, if you want to write your functions as
+```julia
+covfun(x, y, params) = # uses params[1:whatever_it_needs]
+meanfun(x, params)   = # manually uses params[1:whatever_it_needs]
+```
+then you should additionally modify your estimation code with
+```julia
+fancy_init = Parameters(cov_init, mean_init)
+mle    = vecchia_estimate(cfg, fancy_init, solver)
+```
+Now what comes back will be a `Vecchia.Parameters` object, which has separate
+fields `.cov_params` and `.mean_params`. You can also hand that object right to
+`predict` instead of a `Vector{Float64}` and everything will work as expected.
+
+**See the example files for commented and run-able demonstrations.**
 
 # Additional functionality
 
@@ -131,8 +156,6 @@ sol2 = cg(Symmetric(M), v; M=pre, ldiv=false, verbose=1) # ~ 15 iterations
 
 # Roadmap to 1.0:
 
-- More thoughtful interfaces for:
-    - Mean functions.
 - A careful investigation into memoization or similar approaches to speed up
   construction and negative log-likelihood evaluation.
 - Some time for users to kick the tires on the new design.

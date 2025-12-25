@@ -32,9 +32,14 @@ function _hessian       end
 function optimize end
 
 """
-`vecchia_estimate(cfg::VecchiaApproximation, init, solver; kwargs...)`
+`vecchia_estimate(cfg::VecchiaApproximation, init::Vector{Float64}, solver; kwargs...)::Vector{Float64}`
+`vecchia_estimate(cfg::VecchiaApproximation, init::Parameters, solver; kwargs...)::Parameters`
 
-Find the MLE under the Vecchia approximation specified by `cfg`. Initialization is provided by `init`, and the optimizer is specified by `solver`. See the README or example files for examples of solvers. **NOTE:** you will need to `using` some additional packages to load the extensions that give this function useful methods.
+Find the MLE under the Vecchia approximation specified by `cfg`. Initialization is provided by `init`, and the optimizer is specified by `solver`. See the README or example files for examples of solvers. 
+
+**NOTE 1:** you will need to `using` some additional packages to load the extensions that give this function useful methods.
+
+**NOTE 2:** you can *optionally* pass in the init as a `Parameters` object, and let `Vecchia.jl` handle the indexing logic of keeping your mean function parameters and covariance function parameters separated. See the examples and README for more details.
 """
 function vecchia_estimate end
 
