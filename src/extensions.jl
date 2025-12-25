@@ -42,7 +42,3 @@ function vecchia_estimate(cfg, init, solver; kwargs...)
   optimize(cfg, init, solver; kwargs...)
 end
 
-function hnsw_conditioningsets(args...)
-  throw(error("Your particular approxmation design problem, either for dimension or non-Euclidean distance metric or both, is not supported by the default method for this configuration (which is restricted to 2-4 dimensions and Euclidean distance). Please `]add` and `using` the optional dependency `HNSW.jl` to load the fallback extension that will cover your use case."))
-end
-

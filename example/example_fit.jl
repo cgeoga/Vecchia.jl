@@ -1,5 +1,5 @@
 
-using NLPModels, ForwardDiff, UnoSolver
+using NLPModels, ForwardDiff, UnoSolver, sequentialknn_jll
 
 include("example_setup.jl")
 

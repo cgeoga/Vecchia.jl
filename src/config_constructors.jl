@@ -22,26 +22,31 @@ function permute_points_and_data(pts, data, ordering::RandomOrdering)
   (perm, pts_perm, data_perm)
 end
 
+function hnsw_conditioningsets(pts::Vector{SVector{D,Float64}}, 
+                               design::KNNConditioning{M}) where{D,M}
+  condix = [Int64[]]
+  tree   = HierarchicalNSW(pts; metric=design.metric)
+  for j in 2:length(pts)
+    add_to_graph!(tree, [j-1])
+    ptj  = pts[j]
+    idxs = Int64.(knn_search(tree, pts[j], min(j-1, design.k))[1])
+    push!(condix, sort(idxs))
+  end
+  condix
+end
+
+function sknn_conditioningsets end
+
 function conditioningsets(pts::Vector{SVector{D,Float64}}, 
                           design::KNNConditioning{M}) where{D,M}
   # if available, using the _extremely_ fast knn conditioning set design
   # routines from the sequentialknn_jll dependency.
-  if fastknn_routine_available(pts, design)
-    k   = design.k
-    knn = zeros(UInt64, (k, length(pts)))
-    @ccall libsequentialknn.sequential_knn(knn::Ptr{UInt64}, pts::Ptr{Float64},
-                                           length(pts)::Csize_t, D::Csize_t,
-                                           k::Csize_t)::Cvoid
-    map(enumerate(eachcol(knn))) do (j, cj)
-      c = Int64.(cj)[1:min(j-1, k)]
-      sort!(c)
-      c
-    end
+  has_ext = length(methods(sknn_conditioningsets)) > 0
+  if fastknn_routine_available(pts, design) && has_ext
+    @info "Using accelerated sequentialknn_jll methods..." maxlog=1
+    sknn_conditioningsets(pts, design)
   # otherwise, HNSW.jl provides a workable fallback that works for _any_
-  # distance metric in _any_ dimension. Which is great! But it will be slower.
-  # For 1M points in 2D, finding k=30 NNs with the Euclidean metric takes 2-3s
-  # in the above routine and ~53s seconds with the HNSW.jl routine. So certainly
-  # survivable, but if one can go faster, then why not take advantage?
+  # distance metric in _any_ dimension. 
   else
     hnsw_conditioningsets(pts, design)
   end

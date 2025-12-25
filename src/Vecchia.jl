@@ -1,7 +1,7 @@
 
 module Vecchia
 
-  using Random, LinearAlgebra, SparseArrays, StaticArrays, Distances, sequentialknn_jll
+  using Random, LinearAlgebra, SparseArrays, StaticArrays, Distances, HNSW
 
   # from Distances.jl
   export Euclidean, Haversine
