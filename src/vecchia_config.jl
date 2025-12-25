@@ -1,7 +1,15 @@
 
-abstract type VecchiaApproximation{D,F} end
+abstract type VecchiaApproximation{M,D,F} end
 
-struct ChunkedVecchiaApproximation{D,F} <: VecchiaApproximation{D,F}
+struct ZeroMean end
+(zm::ZeroMean)(t::T) where{T} = zero(eltype(T))
+function (zm::ZeroMean)(t::T, params::P) where{T,P} 
+  zero(promote_type(eltype(T), eltype(P)))
+end
+nparams(zm::ZeroMean) = 0
+
+struct ChunkedVecchiaApproximation{M,D,F} <: VecchiaApproximation{M,D,F}
+  meanfun::M
   kernel::F
   data::Vector{Matrix{Float64}} # will be a dummy placeholder if not given
   pts::Vector{Vector{SVector{D, Float64}}}
@@ -23,7 +31,8 @@ end
 #
 # Maybe worth trying the Channel-based threading model for both because it would
 # be so simple?
-struct SingletonVecchiaApproximation{D,F} <: VecchiaApproximation{D,F}
+struct SingletonVecchiaApproximation{M,D,F} <: VecchiaApproximation{M,D,F}
+  meanfun::M
   kernel::F
   data::Union{Nothing, Matrix{Float64}} 
   pts::Vector{SVector{D, Float64}}

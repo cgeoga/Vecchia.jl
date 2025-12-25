@@ -9,7 +9,8 @@ end
 function singleton_to_exact(c::Vecchia.SingletonVecchiaApproximation)
   sp = Vecchia.SingletonPredictionSets()
   (pts_ch, data_ch) = Vecchia.chunk_format_points_and_data(c.pts, c.data, sp)
-  Vecchia.ChunkedVecchiaApproximation(c.kernel, data_ch, pts_ch, c.condix, c.perm)
+  Vecchia.ChunkedVecchiaApproximation(c.meanfun, c.kernel, data_ch, 
+                                      pts_ch, c.condix, c.perm)
 end
 
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])

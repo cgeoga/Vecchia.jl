@@ -78,13 +78,14 @@ end
 
 function VecchiaApproximation(pts::Vector{SVector{D,Float64}},
                               kernel::K, data=nothing;
+                              meanfun=ZeroMean(),
                               ordering=default_ordering(pts),
                               predictionsets=default_predictionsets(),
                               conditioning=default_conditioning(pts)) where{D,K}
   if predictionsets isa SingletonPredictionSets
-    singleton_approximation(pts, kernel, data; ordering, conditioning)
+    singleton_approximation(pts, kernel, data; meanfun, ordering, conditioning)
   else
-    chunked_approximation(pts, kernel, data; ordering, 
+    chunked_approximation(pts, kernel, data; meanfun, ordering, 
                           predictionsets, conditioning)
   end
 end
@@ -97,6 +98,7 @@ end
 
 function chunked_approximation(pts::Vector{SVector{D,Float64}},
                                kernel::K, data=nothing;
+                               meanfun=ZeroMean(),
                                ordering=default_ordering(pts),
                                predictionsets=default_predictionsets(),
                                conditioning=default_conditioning(pts)) where{D,K}
@@ -104,16 +106,17 @@ function chunked_approximation(pts::Vector{SVector{D,Float64}},
   condix = conditioningsets(_pts_perm, conditioning)
   (pts_ch, data_ch) = chunk_format_points_and_data(_pts_perm, _data_perm, 
                                                    predictionsets)
-  ChunkedVecchiaApproximation(kernel, data_ch, pts_ch, condix, perm)
+  ChunkedVecchiaApproximation(meanfun, kernel, data_ch, pts_ch, condix, perm)
 end
 
 function singleton_approximation(pts::Vector{SVector{D,Float64}},
                                  kernel::K, data=nothing;
+                                 meanfun=ZeroMean(),
                                  ordering=ordering,
                                  conditioning=conditioning) where{D,K}
   (perm, pts_perm, data_perm) = permute_points_and_data(pts, data, ordering)
   data_perm = isnothing(data_perm) ? [NaN;;] : hcat(data_perm)
   condix    = conditioningsets(pts_perm, conditioning)
-  SingletonVecchiaApproximation(kernel, data_perm, pts_perm, condix, perm)
+  SingletonVecchiaApproximation(meanfun, kernel, data_perm, pts_perm, condix, perm)
 end
 

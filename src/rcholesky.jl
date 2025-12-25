@@ -178,20 +178,21 @@ end
 # TODO (cg 2025/12/16 11:25): in the chunked case, this produces a huge number
 # of allocations because it is a ton of small matrix allocations. For the
 # SingletonVecchiaConfig, this can probably be brought down dramatically.
-function RCholeskyStorage_alloc(V::ChunkedVecchiaApproximation{D,F}) where{D,F}
+function RCholeskyStorage_alloc(V::ChunkedVecchiaApproximation{M,D,F}) where{M,D,F}
   szs    = map(length, V.pts)
   diags  = prepare_diagonal_chunks(szs)
   odiags = prepare_odiagonal_chunks(V.condix, szs)
   RCholeskyStorage(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
-function allocate_crchol_bufs(V::ChunkedVecchiaApproximation{D,F}, 
-                              cpts_sz, pts_sz) where{D,F}
+function allocate_crchol_bufs(V::ChunkedVecchiaApproximation{M,D,F}, 
+                              cpts_sz, pts_sz) where{M,D,F}
   [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:Threads.nthreads()]
 end
 
-function _rchol_instantiate_index!(strbuf::RCholeskyStorage, V::ChunkedVecchiaApproximation{D,F},
-                                   bufs, i::Int, j::Int, params, tiles) where{D,F}
+function _rchol_instantiate_index!(strbuf::RCholeskyStorage, 
+                                   V::ChunkedVecchiaApproximation{M,D,F},
+                                   bufs, i::Int, j::Int, params, tiles) where{M,D,F}
   # get the buffer for this thread:
   tbuf = bufs[i]
   # get the data and points:
@@ -270,8 +271,9 @@ function _rchol_instantiate_index!(strbuf::RCholeskyStorage, V::ChunkedVecchiaAp
   end
 end
 
-function rchol_instantiate!(strbuf::RCholeskyStorage, V::ChunkedVecchiaApproximation{D,F},
-                            params, tiles) where{D,F}
+function rchol_instantiate!(strbuf::RCholeskyStorage, 
+                            V::ChunkedVecchiaApproximation{M,D,F},
+                            params, tiles) where{M,D,F}
   @assert !strbuf.is_instantiated[] "This routine assumes an un-instantiated RCholeskyStorage. Please allocate a new one and try again."
   strbuf.is_instantiated[] = true
   cpts_sz = chunksize(V)*blockrank(V)
@@ -340,14 +342,15 @@ function SparseArrays.sparse(U::RCholeskyStorage)
   sparse(Iv, Jv, Vv)
 end
 
-function _rchol(V::ChunkedVecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+function _rchol(V::ChunkedVecchiaApproximation{M,D,F}, params; 
+                use_tiles=false) where{M,D,F}
   out   = RCholeskyStorage_alloc(V)
   tiles = use_tiles ? build_tiles(V, params) : nothing
   rchol_instantiate!(out, V, params, tiles)
 end
 
-function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{D,F},
-                           buffers, chunks, params, vixs) where{D,F}
+function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,D,F},
+                           buffers, chunks, params, vixs) where{M,D,F}
   @sync for (i, chunk) in enumerate(chunks)
     Threads.@spawn begin
       bufi = buffers[i]
@@ -370,7 +373,7 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{D,F},
   nothing
 end
 
-function _rchol(V::SingletonVecchiaApproximation{D,F}, params) where{D,F}
+function _rchol(V::SingletonVecchiaApproximation{M,D,F}, params) where{M,D,F}
   n   = length(V.pts)
   # pre-allocate the COO format (I,J,V), like the output from findnz(sparse_matrix).
   nnz = sum(length, V.condix) + length(V.condix)
@@ -413,13 +416,15 @@ Optional keyword arguments are:
 """
 function rchol end
 
-function rchol(V::ChunkedVecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+function rchol(V::ChunkedVecchiaApproximation{M,D,F}, params; 
+               use_tiles=false) where{M,D,F}
   out = _rchol(V, params; use_tiles=use_tiles)
   RCholesky(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
             Array{Float64}(undef, length(V.pts)))
 end
 
-function rchol(V::SingletonVecchiaApproximation{D,F}, params; use_tiles=false) where{D,F}
+function rchol(V::SingletonVecchiaApproximation{M,D,F}, params; 
+               use_tiles=false) where{M,D,F}
   use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
   out = _rchol(V, params)
   RCholesky(out, V.perm, invperm(V.perm),
@@ -436,15 +441,15 @@ Optional keyword arguments are:
 """
 function rchol_preconditioner end
 
-function rchol_preconditioner(V::ChunkedVecchiaApproximation{D,F},
-                              params; use_tiles=false) where{D,F}
+function rchol_preconditioner(V::ChunkedVecchiaApproximation{M,D,F},
+                              params; use_tiles=false) where{M,D,F}
   out = _rchol(V, params; use_tiles=use_tiles)
   RCholeskyPreconditioner(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
                           Array{Float64}(undef, length(V.pts)))
 end
 
-function rchol_preconditioner(V::SingletonVecchiaApproximation{D,F},
-                              params; use_tiles=false) where{D,F}
+function rchol_preconditioner(V::SingletonVecchiaApproximation{M,D,F},
+                              params; use_tiles=false) where{M,D,F}
   use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
   out = _rchol(V, params)
   RCholeskyPreconditioner(out, V.perm, invperm(V.perm),

@@ -8,8 +8,8 @@ struct ChunkedCondLogLikBuf{D,T}
   buf_cpts::Vector{SVector{D,Float64}}
 end
 
-function cnllbuf(V::ChunkedVecchiaApproximation{D,F}, 
-                 params::AbstractVector{T}) where{D,F,T}
+function cnllbuf(V::ChunkedVecchiaApproximation{M,D,F}, 
+                 params::AbstractVector{T}) where{M,D,F,T}
   ndata    = size(V.data[1], 2)
   pts_sz   = maximum(length, V.pts)
   cpts_sz  = pts_sz*maximum(length, V.condix)
@@ -29,15 +29,17 @@ struct SingletonCondLogLikBuf{T}
   buf_cc::Matrix{T}
   buf_cp::Vector{T}
   buf_kwts::Vector{T}
+  buf_cres::Vector{T}
 end
 
-function cnllbuf(V::SingletonVecchiaApproximation{D,F},
-                 params::AbstractVector{T}) where{D,F,T}
+function cnllbuf(V::SingletonVecchiaApproximation{M,D,F},
+                 params::AbstractVector{T}) where{M,D,F,T}
   cpts_sz  = maximum(length, V.condix)
   buf_cc   = Matrix{T}(undef, (cpts_sz, cpts_sz))
   buf_cp   = Vector{T}(undef, cpts_sz)
   buf_kwts = Vector{T}(undef, cpts_sz)
-  SingletonCondLogLikBuf(buf_cc, buf_cp, buf_kwts)
+  buf_cres = Vector{T}(undef, cpts_sz)
+  SingletonCondLogLikBuf(buf_cc, buf_cp, buf_kwts, buf_cres)
 end
 
 function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T}
@@ -45,8 +47,8 @@ function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T
   (2*logdet(U), sum(_square, y_mut_allowed))
 end
 
-function nll(V::VecchiaApproximation{D,F}, 
-             params::AbstractVector{T}) where{D,F,T}
+function nll(V::VecchiaApproximation{M,D,F}, 
+             params::AbstractVector{T}) where{M,D,F,T}
   n         = length(V.pts)
   chunks    = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
   works     = [cnllbuf(V, params) for _ in 1:length(chunks)]
@@ -57,9 +59,9 @@ function nll(V::VecchiaApproximation{D,F},
   out
 end
 
-function _nll(V::VecchiaApproximation{D,F}, 
+function _nll(V::VecchiaApproximation{M,D,F}, 
               params::AbstractVector{T},
-              works, chunks) where{D,F,T}
+              works, chunks) where{M,D,F,T}
   logdets = zeros(T, length(chunks))
   qforms  = zeros(T, length(chunks))
   @sync for (j, cj) in enumerate(chunks)
@@ -80,10 +82,10 @@ function _nll(V::VecchiaApproximation{D,F},
   (total_logdets + total_qforms)/2
 end
 
-(V::VecchiaApproximation{D,F})(p) where{D,F} = nll(V, p)
+(V::VecchiaApproximation{M,D,F})(p) where{M,D,F} = nll(V, p)
 
-function cnll_str(V::ChunkedVecchiaApproximation{D,F}, j::Int, 
-                  strbuf::ChunkedCondLogLikBuf{D,T}, params) where{D,F,T}
+function cnll_str(V::ChunkedVecchiaApproximation{M,D,F}, j::Int, 
+                  strbuf::ChunkedCondLogLikBuf{D,T}, params) where{M,D,F,T}
   # prepare the marginal points and buffer:
   pts    = V.pts[j]
   dat    = V.data[j]
@@ -129,8 +131,8 @@ end
 # pulling this functionality out because it can be reused in the simpler rchol
 # in the singleton case.
 function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
-                              V::SingletonVecchiaApproximation{D,F},
-                              params::AbstractVector{T}) where{D,F,T}
+                              V::SingletonVecchiaApproximation{M,D,F},
+                              params::AbstractVector{T}) where{M,D,F,T}
   ptj   = V.pts[j]
   covjj = V.kernel(ptj, ptj, params)
   idxs  = V.condix[j]
@@ -147,17 +149,24 @@ function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
 end
 
 
-function cnll_str(V::SingletonVecchiaApproximation{D,F}, j::Int,
+function cnll_str(V::SingletonVecchiaApproximation{M,D,F}, j::Int,
                   strbuf::SingletonCondLogLikBuf{T},
-                  params::AbstractVector{T}) where{D,F,T}
+                  params::AbstractVector{T}) where{M,D,F,T}
   ptj   = V.pts[j]
   idxs  = V.condix[j]
   cvar  = prepare_conditional!(strbuf, j, V, params)
   isempty(idxs) && return (log(cvar), sum(abs2, view(V.data, j, :))/cvar)
   icvar = inv(cvar)
   kwts  = view(strbuf.buf_kwts, 1:length(idxs))
-  qforms = sum(1:size(V.data, 2)) do k
-    icvar*(V.data[j,k] - dot(view(V.data, idxs, k), kwts))^2
+  qforms  = sum(1:size(V.data, 2)) do k
+    cpts  = view(V.pts, idxs)
+    cdata = view(V.data, idxs, k)
+    cres  = view(strbuf.buf_cres, 1:length(idxs))
+    copyto!(cres, cdata)
+    for (j, cj) in enumerate(cpts)
+      cres[j] -= V.meanfun(cj, params) 
+    end
+    icvar*(V.data[j,k] - dot(cres, kwts))^2
   end
   (log(cvar), qforms)
 end
