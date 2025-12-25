@@ -3,7 +3,8 @@ using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia
 
 function exact_nll(cfg::Vecchia.SingletonVecchiaApproximation, p)
   S   = [cfg.kernel(x, y, p) for x in cfg.pts, y in cfg.pts]
-  Vecchia.generic_dense_nll(S, cfg.data)
+  mu  = [cfg.meanfun(x, p) for x in cfg.pts]
+  Vecchia.generic_dense_nll(S, cfg.data - mu)
 end
 
 function singleton_to_exact(c::Vecchia.SingletonVecchiaApproximation)
@@ -14,55 +15,60 @@ function singleton_to_exact(c::Vecchia.SingletonVecchiaApproximation)
 end
 
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
+meanfun(x, p)   = exp(x[1]*p[3])
 
 # quick testing values:
 rng    = StableRNG(123)
-test_p = [0.1, 0.1]
+test_p = [0.1, 0.2, 0.3]
 pts    = rand(rng, SVector{2,Float64}, 100)
 sim1   = randn(rng, length(pts))
 sim2   = randn(rng, length(pts))
 
 appxe  = VecchiaApproximation(pts, kernel, sim1; 
+                              meanfun=meanfun,
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(1000))
 
 appx1  = VecchiaApproximation(pts, kernel, sim1; 
+                              meanfun=meanfun,
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
 
 appx1c = singleton_to_exact(appx1)
 
 appx2  = VecchiaApproximation(pts, kernel, sim2; 
+                              meanfun=meanfun,
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
 
 appx12 = VecchiaApproximation(pts, kernel, hcat(sim1, sim2); 
+                              meanfun=meanfun,
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
 
 
 @testset "nll" begin
-  @test isapprox(appxe(ones(2)), exact_nll(appxe, ones(2)))
+  @test isapprox(appxe(test_p), exact_nll(appxe, test_p))
 end
 
 @testset "chunked versus singleton nll" begin
-  @test isapprox(appx1(ones(2)), appx1c(ones(2)))
+  @test isapprox(appx1(test_p), appx1c(test_p))
 end
 
 @testset "multiple data nll" begin
-  @test isapprox(appx1(ones(2)) + appx2(ones(2)), appx12(ones(2)))
+  @test isapprox(appx1(test_p) + appx2(test_p), appx12(test_p))
 end
 
 @testset "rchol tiles" begin
-  U = Vecchia._rchol(appx1c, ones(2))
-  U_tiles = Vecchia._rchol(appx1c, ones(2), use_tiles=true)
+  U = Vecchia._rchol(appx1c, test_p)
+  U_tiles = Vecchia._rchol(appx1c, test_p, use_tiles=true)
   @test U.diagonals  == U_tiles.diagonals
   @test U.odiagonals == U_tiles.odiagonals
 end
 
 @testset "chunked versus singleton rchol" begin
-  Us = rchol(appx1,  ones(2)).U
-  Uc = rchol(appx1c, ones(2)).U
+  Us = rchol(appx1,  test_p).U
+  Uc = rchol(appx1c, test_p).U
   @test Us ≈ Uc
 end
 
