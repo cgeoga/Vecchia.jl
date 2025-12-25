@@ -12,7 +12,7 @@ include("example_setup.jl")
 # because we won't be using it. And for a preconditioner, I recommend cranking
 # up the number of conditioning points a bit past the defaults, which are tuned
 # for likelihoods.
-appx = VecchiaApproximation(pts, matern; conditioning=KNNConditioning(25))
+appx = VecchiaApproximation(pts, matern; conditioning=KNNConditioning(30))
 pre  = rchol_preconditioner(appx, [5.0, 0.1, 2.25])
 
 # the dense exact covariance matrix for comparison.

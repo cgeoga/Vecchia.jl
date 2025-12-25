@@ -396,7 +396,10 @@ function _rchol(V::SingletonVecchiaApproximation{D,F}, params) where{D,F}
   chunks  = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
   buffers = [cnllbuf(V, params) for _ in 1:length(chunks)]
   # with everything allocated, hand to the non-allocating routine.
+  blas_nthr = BLAS.get_num_threads()
+  BLAS.set_num_threads(1)
   _rchol_singleton!(vals, V, buffers, chunks, params, view_ixs)
+  BLAS.set_num_threads(blas_nthr)
   UpperTriangular(sparse(I, J, vals))
 end
 

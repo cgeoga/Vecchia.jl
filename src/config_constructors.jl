@@ -57,11 +57,6 @@ function conditioningsets(pts::Vector{SVector{1,Float64}},
   condix
 end
 
-function format_points_and_data(pts, data, ::SingletonPredictionSets)
-  pts_str  = [[x] for x in pts]
-  data_str = isnothing(data) ? [[NaN;;]] : permutedims.(collect.(eachrow(data))) 
-  (pts_str, data_str)
-end
 
 default_ordering(pts::Vector{SVector{1,Float64}}) = Sorted1D()
 default_ordering(pts::Vector{SVector{D,Float64}}) where{D} = RandomOrdering()
@@ -77,25 +72,43 @@ function default_conditioning(pts::Vector{SVector{D,Float64}}) where{D}
 end
 
 function VecchiaApproximation(pts::Vector{SVector{D,Float64}},
-                              kernel::K,
-                              data=nothing;
+                              kernel::K, data=nothing;
                               ordering=default_ordering(pts),
                               predictionsets=default_predictionsets(),
                               conditioning=default_conditioning(pts)) where{D,K}
-  (perm, _pts_perm, _data_perm) = permute_points_and_data(pts, data, ordering)
-  condix = conditioningsets(_pts_perm, conditioning)
-  (pts_str, data_str) = format_points_and_data(_pts_perm, _data_perm, predictionsets)
-  ChunkedVecchiaApproximation(kernel, data_str, pts_str, condix, perm)
+  if predictionsets isa SingletonPredictionSets
+    singleton_approximation(pts, kernel, data; ordering, conditioning)
+  else
+    chunked_approximation(pts, kernel, data; ordering, 
+                          predictionsets, conditioning)
+  end
 end
 
-function temporary(pts::Vector{SVector{D,Float64}},
-                              kernel::K,
-                              data=nothing;
-                              ordering=default_ordering(pts),
-                              predictionsets=default_predictionsets(),
-                              conditioning=default_conditioning(pts)) where{D,K}
+function chunk_format_points_and_data(pts, data, ::SingletonPredictionSets)
+  pts_str  = [[x] for x in pts]
+  data_str = isnothing(data) ? [[NaN;;]] : permutedims.(collect.(eachrow(data))) 
+  (pts_str, data_str)
+end
+
+function chunked_approximation(pts::Vector{SVector{D,Float64}},
+                               kernel::K, data=nothing;
+                               ordering=default_ordering(pts),
+                               predictionsets=default_predictionsets(),
+                               conditioning=default_conditioning(pts)) where{D,K}
+  (perm, _pts_perm, _data_perm) = permute_points_and_data(pts, data, ordering)
+  condix = conditioningsets(_pts_perm, conditioning)
+  (pts_ch, data_ch) = chunk_format_points_and_data(_pts_perm, _data_perm, 
+                                                   predictionsets)
+  ChunkedVecchiaApproximation(kernel, data_ch, pts_ch, condix, perm)
+end
+
+function singleton_approximation(pts::Vector{SVector{D,Float64}},
+                                 kernel::K, data=nothing;
+                                 ordering=ordering,
+                                 conditioning=conditioning) where{D,K}
   (perm, pts_perm, data_perm) = permute_points_and_data(pts, data, ordering)
-  condix = conditioningsets(pts_perm, conditioning)
-  SingletonVecchiaApproximation(kernel, hcat(data_perm), pts_perm, condix, perm)
+  data_perm = isnothing(data_perm) ? [NaN;;] : hcat(data_perm)
+  condix    = conditioningsets(pts_perm, conditioning)
+  SingletonVecchiaApproximation(kernel, data_perm, pts_perm, condix, perm)
 end
 

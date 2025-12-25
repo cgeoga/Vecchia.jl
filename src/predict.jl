@@ -10,29 +10,19 @@ end
 
 default_pred_conditioning(pts) = KNNConditioning(60, Euclidean())
 
-function check_prediction_compatibility(va::VecchiaApproximation)
-  if !all(x->isone(length(x)), va.pts)
-    throw(errror("For now, prediction problems require singleton prediction sets."))
-  end
-  isnothing(va.data) && throw(error("For prediction problems, you must provide data."))
-  nothing
-end
-
 # >= v0.12: updating this internal routine to just have one conditioning argument. 
-function VecchiaPrediction(va::VecchiaApproximation{D,F},
+function VecchiaPrediction(va::SingletonVecchiaApproximation{D,F},
                            pred_pts::Vector{SVector{D,Float64}};
                            ordering=default_ordering(pred_pts),
                            conditioning=default_pred_conditioning(pred_pts)) where{D,F}
-  # check compatibility of the VecchiaApproximation. Most of the restrictions
-  # here are temporary and just need implementation to lift.
-  check_prediction_compatibility(va)
+  isnothing(va.data) && throw(error("For prediction problems, you must provide data."))
   # re-order the points according to the requested ordering.
   (pred_perm, pred_pts_perm, _) = permute_points_and_data(pred_pts, nothing, ordering)
   # join va.pts with the new prediction points and provide new prediction sets.
-  joint_pts    = vcat(reduce(vcat, va.pts), pred_pts_perm)
+  joint_pts    = vcat(va.pts, pred_pts_perm)
   joint_condix = conditioningsets(joint_pts, conditioning)
   # return the final prediction object.
-  VecchiaPrediction(length(va.pts), va.kernel, reduce(vcat, va.data), 
+  VecchiaPrediction(length(va.pts), va.kernel, va.data, 
                     joint_pts, joint_condix, pred_perm)
 end
 
@@ -52,7 +42,7 @@ Keyword arguments are given as:
 - `ordering::PointEnumeration=default_ordering(pred_pts)`: the way you want the prediction points to be ordered. The default in 1D is `Sorted1D()`, and in 2+D is `RandomOrdering()`.
 - `conditioning::ConditioningSetDesign=default_pred_data_conditioning(pred_pts)`: The size of the conditioning sets for the prediction problem. In general, this will be larger than what is used for parameter estimation, and will default to `k=60` nearest neighbors.
 """
-function predict(va::VecchiaApproximation{D,F},
+function predict(va::SingletonVecchiaApproximation{D,F},
                  pred_pts::Vector{SVector{D,Float64}}, 
                  params;
                  conditional_simulate=false,
@@ -62,12 +52,17 @@ function predict(va::VecchiaApproximation{D,F},
   predict(vp, params)
 end
 
+function predict(va::ChunkedVecchiaApproximation{D,F},
+                 args...; kwargs...) where{D,F}
+  throw(error("Prediction with `ChunkedVecchiaApproximation`s is not implemented, sorry. It wouldn't be hard, though, so please open an issue if you need that functionality."))
+end
+
 function predict(vp::VecchiaPrediction{D,F}, params; 
                  conditional_simulate=false) where{D,F}
-  jva = ChunkedVecchiaApproximation(vp.kernel, [[NaN;;]], [[x] for x in vp.joint_pts],
-                                    vp.joint_condix, Int64[])
+  jva = SingletonVecchiaApproximation(vp.kernel, [NaN;;], vp.joint_pts,
+                                      vp.joint_condix, Int64[])
   ixs     = (vp.n+1):length(vp.joint_pts)
-  U       = rchol(jva, params; use_tiles=true).U
+  U       = rchol(jva, params).U
   U_cross = U[(1:vp.n),ixs]
   U_pred  = UpperTriangular(U[ixs, ixs])
   z       = -U_cross'*vp.data

@@ -1,11 +1,15 @@
 
 using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia
 
-function exact_nll(cfg, p)
-  pts = reduce(vcat, cfg.pts)
-  dat = reduce(vcat, cfg.data)
-  S   = [cfg.kernel(x, y, p) for x in pts, y in pts]
-  Vecchia.generic_dense_nll(S, dat)
+function exact_nll(cfg::Vecchia.SingletonVecchiaApproximation, p)
+  S   = [cfg.kernel(x, y, p) for x in cfg.pts, y in cfg.pts]
+  Vecchia.generic_dense_nll(S, cfg.data)
+end
+
+function singleton_to_exact(c::Vecchia.SingletonVecchiaApproximation)
+  sp = Vecchia.SingletonPredictionSets()
+  (pts_ch, data_ch) = Vecchia.chunk_format_points_and_data(c.pts, c.data, sp)
+  Vecchia.ChunkedVecchiaApproximation(c.kernel, data_ch, pts_ch, c.condix, c.perm)
 end
 
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
@@ -25,6 +29,8 @@ appx1  = VecchiaApproximation(pts, kernel, sim1;
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
 
+appx1c = singleton_to_exact(appx1)
+
 appx2  = VecchiaApproximation(pts, kernel, sim2; 
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
@@ -38,15 +44,25 @@ appx12 = VecchiaApproximation(pts, kernel, hcat(sim1, sim2);
   @test isapprox(appxe(ones(2)), exact_nll(appxe, ones(2)))
 end
 
+@testset "chunked versus singleton nll" begin
+  @test isapprox(appx1(ones(2)), appx1c(ones(2)))
+end
+
 @testset "multiple data nll" begin
   @test isapprox(appx1(ones(2)) + appx2(ones(2)), appx12(ones(2)))
 end
 
 @testset "rchol tiles" begin
-  U = Vecchia._rchol(appx1, ones(3))
-  U_tiles = Vecchia._rchol(appx1, ones(3), use_tiles=true)
+  U = Vecchia._rchol(appx1c, ones(2))
+  U_tiles = Vecchia._rchol(appx1c, ones(2), use_tiles=true)
   @test U.diagonals  == U_tiles.diagonals
   @test U.odiagonals == U_tiles.odiagonals
+end
+
+@testset "chunked versus singleton rchol" begin
+  Us = rchol(appx1,  ones(2)).U
+  Uc = rchol(appx1c, ones(2)).U
+  @test Us ≈ Uc
 end
 
 @testset "rchol solve and mul" begin

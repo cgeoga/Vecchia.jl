@@ -13,7 +13,7 @@ mle    = vecchia_estimate(approx, ones(3), solver;
                           box_upper=[10.0, 10.0, 5.0])
 
 # now predict at the un-observed locations.
-pred   = predict(approx, pts_pred, [5.0, 0.1, 2.25])
+pred   = predict(approx, pts_pred, mle)
 
 # summarize the first few results:
 using Printf
