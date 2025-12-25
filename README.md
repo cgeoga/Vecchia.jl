@@ -21,7 +21,7 @@ library offers several features that set it apart from others in the space:
 
 **See the example files for commented and run-able demonstrations.** 
 
-## Simple usage demonstration (mean zero)
+## Simple usage demonstration
 
 If you have data `data` measured at locations `pts::Vector{SVector{D,Float64}}`
 and you want to fit the parameters of covariance function `kernel(pt_1, pt_2, params)`, 
