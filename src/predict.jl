@@ -58,17 +58,29 @@ function predict(va::ChunkedVecchiaApproximation{M,D,F},
   throw(error("Prediction with `ChunkedVecchiaApproximation`s is not implemented, sorry. It wouldn't be hard, though, so please open an issue if you need that functionality."))
 end
 
-function predict(vp::VecchiaPrediction{M,D,F}, params; 
+function predict(vp::VecchiaPrediction{M,D,F}, cov_params, mean_params; 
                  conditional_simulate=false) where{M,D,F}
   jva = SingletonVecchiaApproximation(vp.meanfun, vp.kernel, [NaN;;], 
                                       vp.joint_pts, vp.joint_condix, Int64[])
   ixs     = (vp.n+1):length(vp.joint_pts)
-  U       = rchol(jva, params).U
+  U       = rchol(jva, cov_params).U
   U_cross = U[(1:vp.n),ixs]
   U_pred  = UpperTriangular(U[ixs, ixs])
-  z       = -U_cross'*vp.data
+  mu      = [jva.meanfun(x, mean_params) for x in jva.pts]
+  z       = -U_cross'*(vp.data - mu[1:vp.n])
   conditional_simulate && (z .+= randn(length(z)))
-  cmean   = U_pred'\z
+  cmean   = U_pred'\z + mu[(vp.n+1):end]
   cmean[invperm(vp.pred_perm)] 
+end
+
+function predict(vp::VecchiaPrediction{M,D,F}, params; 
+                 conditional_simulate=false) where{M,D,F}
+  predict(vp, params, params; conditional_simulate=conditional_simulate)
+end
+
+function predict(vp::VecchiaPrediction{M,D,F}, params::Parameters; 
+                 conditional_simulate=false) where{M,D,F}
+  predict(vp, params.cov_params, params.mean_params; 
+          conditional_simulate=conditional_simulate)
 end
 

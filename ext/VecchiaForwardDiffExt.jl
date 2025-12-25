@@ -25,29 +25,28 @@ module VecchiaForwardDiffExt
   struct CachingADWrapper{F}
     fn::F
     cache::Dict{Vector{Float64}, EvaluationResult}
+    cov_ixs::UnitRange{Int64}
+    mean_ixs::UnitRange{Int64}
   end
 
-  function Vecchia.adcachewrapper(fn::F) where{F}
+  function Vecchia.adcachewrapper(fn::F, cov_ixs, mean_ixs) where{F}
     cache = Dict{Vector{Float64}, EvaluationResult}()
-    CachingADWrapper(fn, cache)
+    obj   = t->fn(t; cov_param_ixs=cov_ixs, mean_param_ixs=mean_ixs)
+    CachingADWrapper(obj, cache, cov_ixs, mean_ixs)
   end
 
   function Vecchia._primal(cw::CachingADWrapper{F}, x) where{F}
-    #temporary_print(x, :primal)
     haskey(cw.cache, x) && return cw.cache[x].primal
-    #println("not found.")
     primal = cw.fn(x)
     cw.cache[x] = EvaluationResult(primal, nothing, nothing)
     primal
   end
 
   function Vecchia._gradient(cw::CachingADWrapper{F}, x) where{F}
-    #temporary_print(x, :gradient)
     if haskey(cw.cache, x)
       x_res = cw.cache[x]
       isnothing(x_res.gradient) || return x_res.gradient
     end
-    #println("not found.")
     res = DiffResults.GradientResult(x)
     ForwardDiff.gradient!(res, cw.fn, x)
     store = EvaluationResult(DiffResults.value(res), 
@@ -58,12 +57,10 @@ module VecchiaForwardDiffExt
   end
 
   function Vecchia._hessian(cw::CachingADWrapper{F}, x) where{F}
-    #temporary_print(x, :hessian)
     if haskey(cw.cache, x)
       x_res = cw.cache[x]
       isnothing(x_res.hessian) || return x_res.hessian
     end
-    #println("not found.")
     res = DiffResults.HessianResult(x)
     ForwardDiff.hessian!(res, cw.fn, x)
     store = EvaluationResult(DiffResults.value(res), 

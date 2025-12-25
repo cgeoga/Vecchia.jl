@@ -38,7 +38,13 @@ Find the MLE under the Vecchia approximation specified by `cfg`. Initialization 
 """
 function vecchia_estimate end
 
-function vecchia_estimate(cfg, init, solver; kwargs...)
+function vecchia_estimate(cfg, init::Vector{Float64}, solver; kwargs...)
   optimize(cfg, init, solver; kwargs...)
+end
+
+function vecchia_estimate(cfg, init::Parameters, solver; kwargs...)
+  res = optimize(cfg, init, solver; kwargs...)
+  Parameters(res[1:length(init.cov_params)],
+             res[(length(init.cov_params)+1):end])
 end
 

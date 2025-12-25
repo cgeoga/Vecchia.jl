@@ -10,11 +10,36 @@ module VecchiaNLPModelsExt
     p::Int64
   end
 
-  function Vecchia.nlp(cfg::C, init;
-                       box_lower=fill(0.0, length(init)),
-                       box_upper=fill(Inf, length(init))) where{C}
-    meta      = NLPModelMeta(length(init); x0=init, lvar=box_lower, uvar=box_upper, hprod_available=false)
-    cache_cfg = Vecchia.adcachewrapper(cfg)
+  default_lowerbox(init::Vector{Float64}) = zeros(length(init))
+  default_upperbox(init::Vector{Float64}) = fill(Inf, length(init)) 
+
+  function default_lowerbox(init::Parameters)
+    vcat(zeros(length(init.cov_params)), fill(-Inf, length(init.mean_params)))
+  end
+
+  default_upperbox(init::Parameters) = fill(Inf, length(init))
+
+  function Vecchia.nlp(cfg::C, init::Vector{Float64};
+                       box_lower=default_lowerbox(init),
+                       box_upper=default_upperbox(init)) where{C}
+    meta      = NLPModelMeta(length(init); x0=init, lvar=box_lower, 
+                             uvar=box_upper, hprod_available=false)
+    (cov_ixs, mean_ixs) = (1:length(init), 1:length(init))
+    cache_cfg = Vecchia.adcachewrapper(cfg, cov_ixs, mean_ixs)
+    VecchiaNLPModel(cache_cfg, meta, Counters(), length(init))
+  end
+
+  function Vecchia.nlp(cfg::C, init::Parameters;
+                       box_lower=default_lowerbox(init),
+                       box_upper=default_upperbox(init)) where{C}
+    _init      = vcat(init.cov_params, init.mean_params)
+    meta       = NLPModelMeta(length(init); x0=collect(init), lvar=box_lower, 
+                              uvar=box_upper, hprod_available=false)
+    ncovparams = length(init.cov_params)
+    nparams    = length(init.cov_params) + length(init.mean_params)
+    cov_ixs    = 1:ncovparams
+    mean_ixs   = (ncovparams+1):nparams
+    cache_cfg  = Vecchia.adcachewrapper(cfg, cov_ixs, mean_ixs)
     VecchiaNLPModel(cache_cfg, meta, Counters(), length(init))
   end
 

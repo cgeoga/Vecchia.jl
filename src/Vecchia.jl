@@ -7,7 +7,7 @@ module Vecchia
   export Euclidean, Haversine
 
   include("vecchia_config.jl")
-  export VecchiaApproximation, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning
+  export VecchiaApproximation, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning, Parameters
 
   include("utils.jl")
 

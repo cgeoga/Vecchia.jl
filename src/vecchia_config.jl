@@ -98,3 +98,11 @@ Keyword arguments, which specify details of the approximation, are:
 """
 function VecchiaApproximation end
 
+Base.@kwdef struct Parameters
+  cov_params::Vector{Float64}
+  mean_params::Vector{Float64}
+end
+
+Base.length(p::Parameters)  = length(p.cov_params) + length(p.mean_params)
+Base.collect(p::Parameters) = vcat(p.cov_params, p.mean_params)
+
