@@ -48,19 +48,27 @@ function negloglik(U::UpperTriangular, y_mut_allowed::AbstractMatrix{T}) where{T
 end
 
 function nll(V::VecchiaApproximation{M,D,F}, 
-             params::AbstractVector{T}) where{M,D,F,T}
-  n         = length(V.pts)
-  chunks    = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
-  works     = [cnllbuf(V, params) for _ in 1:length(chunks)]
-  blas_nthr = BLAS.get_num_threads()
+             params::AbstractVector{T};
+             cov_param_ixs::UnitRange{Int64}=1:length(params),
+             mean_param_ixs::UnitRange{Int64}=1:length(params)) where{M,D,F,T}
+  n           = length(V.pts)
+  chunks      = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
+  works       = [cnllbuf(V, params) for _ in 1:length(chunks)]
+  blas_nthr   = BLAS.get_num_threads()
+  # by default, the cov and mean params _do_ overlap and are just the whole
+  # parameter vector, so that people who want to handle things on their own can
+  # do that.
+  cov_params  = params[cov_param_ixs]
+  mean_params = params[mean_param_ixs]
   BLAS.set_num_threads(1)
-  out = _nll(V, params, works, chunks)
+  out = _nll(V, cov_params, mean_params, works, chunks)
   BLAS.set_num_threads(blas_nthr)
   out
 end
 
 function _nll(V::VecchiaApproximation{M,D,F}, 
-              params::AbstractVector{T},
+              cov_params::AbstractVector{T},
+              mean_params::AbstractVector{T},
               works, chunks) where{M,D,F,T}
   logdets = zeros(T, length(chunks))
   qforms  = zeros(T, length(chunks))
@@ -69,7 +77,7 @@ function _nll(V::VecchiaApproximation{M,D,F},
       wj = works[j]
       (_logdets, _qforms) = (0.0, 0.0)
       for k in cj
-        (logdetk, qformk) = cnll_str(V, k, wj, params)
+        (logdetk, qformk) = cnll_str(V, k, wj, cov_params, mean_params)
         _logdets += logdetk
         _qforms  += qformk
       end
@@ -82,10 +90,14 @@ function _nll(V::VecchiaApproximation{M,D,F},
   (total_logdets + total_qforms)/2
 end
 
-(V::VecchiaApproximation{M,D,F})(p) where{M,D,F} = nll(V, p)
+function (V::VecchiaApproximation{M,D,F})(p; cov_param_ixs=1:length(p),
+                                          mean_param_ixs=1:length(p)) where{M,D,F}
+  nll(V, p; cov_param_ixs, mean_param_ixs)
+end
 
 function cnll_str(V::ChunkedVecchiaApproximation{M,D,F}, j::Int, 
-                  strbuf::ChunkedCondLogLikBuf{D,T}, params) where{M,D,F,T}
+                  strbuf::ChunkedCondLogLikBuf{D,T}, 
+                  cov_params, mean_params) where{M,D,F,T}
   # prepare the marginal points and buffer:
   pts    = V.pts[j]
   dat    = V.data[j]
@@ -93,10 +105,10 @@ function cnll_str(V::ChunkedVecchiaApproximation{M,D,F}, j::Int,
   mdat   = view(strbuf.buf_mdat, 1:size(dat,1), :)
   mdat  .= dat
   cov_pp = view(strbuf.buf_pp, 1:length(pts),  1:length(pts))
-  updatebuf!(cov_pp,  pts,  pts, V.kernel, params, skipltri=false)
+  updatebuf!(cov_pp,  pts,  pts, V.kernel, cov_params, skipltri=false)
   # subtract off mean from the prediction set data.
   for (k, ptk) in enumerate(pts)
-    view(mdat, k, :) .-= V.meanfun(ptk, params)
+    view(mdat, k, :) .-= V.meanfun(ptk, mean_params)
   end
   # if the conditioning set is empty, just return the marginal nll:
   if isempty(idxs)
@@ -108,13 +120,13 @@ function cnll_str(V::ChunkedVecchiaApproximation{M,D,F}, j::Int,
   cdat  = updatedatbuf!(strbuf.buf_cdat, V.data, idxs)
   # subtract off mean from the prediction set data.
   for (k, ptk) in enumerate(cpts)
-    view(cdat, k, :) .-= V.meanfun(ptk, params)
+    view(cdat, k, :) .-= V.meanfun(ptk, mean_params)
   end
   # prepare and fill in the matrix buffers pertaining to the cond.  points:
   cov_cp = view(strbuf.buf_cp, 1:length(cpts), 1:length(pts))
   cov_cc = view(strbuf.buf_cc, 1:length(cpts), 1:length(cpts))
-  updatebuf!(cov_cc, cpts, cpts, V.kernel, params, skipltri=false)
-  updatebuf!(cov_cp, cpts,  pts, V.kernel, params, skipltri=false)
+  updatebuf!(cov_cc, cpts, cpts, V.kernel, cov_params, skipltri=false)
+  updatebuf!(cov_cp, cpts,  pts, V.kernel, cov_params, skipltri=false)
   # Factorize the covariance matrix for the conditioning points:
   cov_cc_f = cholesky!(Hermitian(cov_cc))
   # Before mutating the cross-covariance buffer, compute y - hat{y}, where
@@ -140,17 +152,17 @@ end
 # in the singleton case.
 function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
                               V::SingletonVecchiaApproximation{M,D,F},
-                              params::AbstractVector{T}) where{M,D,F,T}
+                              cov_params::AbstractVector{T}) where{M,D,F,T}
   ptj   = V.pts[j]
-  covjj = V.kernel(ptj, ptj, params)
+  covjj = V.kernel(ptj, ptj, cov_params)
   idxs  = V.condix[j]
   isempty(idxs) && return covjj
   cpts   = view(V.pts, idxs)
   cov_cc = view(strbuf.buf_cc,   1:length(idxs), 1:length(idxs))
   cov_cp = view(strbuf.buf_cp,   1:length(idxs))
   kwts   = view(strbuf.buf_kwts, 1:length(idxs))
-  updatebuf!(cov_cc, cpts, V.kernel, params)
-  updatebuf!(cov_cp, cpts, ptj, V.kernel, params)
+  updatebuf!(cov_cc, cpts, V.kernel, cov_params)
+  updatebuf!(cov_cp, cpts, ptj, V.kernel, cov_params)
   cov_cc_f = cholesky!(Symmetric(cov_cc))
   ldiv!(kwts, cov_cc_f, cov_cp)
   covjj - dot(kwts, cov_cp)
@@ -158,12 +170,13 @@ end
 
 function cnll_str(V::SingletonVecchiaApproximation{M,D,F}, j::Int,
                   strbuf::SingletonCondLogLikBuf{T},
-                  params::AbstractVector{T}) where{M,D,F,T}
+                  cov_params::AbstractVector{T},
+                  mean_params::AbstractVector{T}) where{M,D,F,T}
   ndata = size(V.data, 2)
   ptj   = V.pts[j]
-  meanj = V.meanfun(ptj, params)
+  meanj = V.meanfun(ptj, mean_params)
   idxs  = V.condix[j]
-  cvar  = prepare_conditional!(strbuf, j, V, params)
+  cvar  = prepare_conditional!(strbuf, j, V, cov_params)
   icvar = inv(cvar)
   if isempty(idxs) 
     dataj = view(V.data, j, :)
@@ -177,7 +190,7 @@ function cnll_str(V::SingletonVecchiaApproximation{M,D,F}, j::Int,
     cres  = view(strbuf.buf_cres, 1:length(idxs))
     copyto!(cres, cdata)
     for (j, cj) in enumerate(cpts)
-      cres[j] -= V.meanfun(cj, params) 
+      cres[j] -= V.meanfun(cj, mean_params) 
     end
     icvar*((V.data[j,k] - meanj) - dot(cres, kwts))^2
   end
