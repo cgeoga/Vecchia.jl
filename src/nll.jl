@@ -94,6 +94,10 @@ function cnll_str(V::ChunkedVecchiaApproximation{M,D,F}, j::Int,
   mdat  .= dat
   cov_pp = view(strbuf.buf_pp, 1:length(pts),  1:length(pts))
   updatebuf!(cov_pp,  pts,  pts, V.kernel, params, skipltri=false)
+  # subtract off mean from the prediction set data.
+  for (k, ptk) in enumerate(pts)
+    view(mdat, k, :) .-= V.meanfun(ptk, params)
+  end
   # if the conditioning set is empty, just return the marginal nll:
   if isempty(idxs)
     cov_pp_f = cholesky!(Hermitian(cov_pp))
@@ -102,6 +106,10 @@ function cnll_str(V::ChunkedVecchiaApproximation{M,D,F}, j::Int,
   # otherwise, proceed and prepare conditioning points:
   cpts  = updateptsbuf!(strbuf.buf_cpts, V.pts,  idxs)
   cdat  = updatedatbuf!(strbuf.buf_cdat, V.data, idxs)
+  # subtract off mean from the prediction set data.
+  for (k, ptk) in enumerate(cpts)
+    view(cdat, k, :) .-= V.meanfun(ptk, params)
+  end
   # prepare and fill in the matrix buffers pertaining to the cond.  points:
   cov_cp = view(strbuf.buf_cp, 1:length(cpts), 1:length(pts))
   cov_cc = view(strbuf.buf_cc, 1:length(cpts), 1:length(cpts))
@@ -148,17 +156,22 @@ function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
   covjj - dot(kwts, cov_cp)
 end
 
-
 function cnll_str(V::SingletonVecchiaApproximation{M,D,F}, j::Int,
                   strbuf::SingletonCondLogLikBuf{T},
                   params::AbstractVector{T}) where{M,D,F,T}
+  ndata = size(V.data, 2)
   ptj   = V.pts[j]
+  meanj = V.meanfun(ptj, params)
   idxs  = V.condix[j]
   cvar  = prepare_conditional!(strbuf, j, V, params)
-  isempty(idxs) && return (log(cvar), sum(abs2, view(V.data, j, :))/cvar)
   icvar = inv(cvar)
-  kwts  = view(strbuf.buf_kwts, 1:length(idxs))
-  qforms  = sum(1:size(V.data, 2)) do k
+  if isempty(idxs) 
+    dataj = view(V.data, j, :)
+    qform = sum(k->icvar*(V.data[j,k] - meanj)^2, 1:ndata)
+    (log(cvar), qform)
+  end
+  kwts = view(strbuf.buf_kwts, 1:length(idxs))
+  qforms  = sum(1:ndata) do k
     cpts  = view(V.pts, idxs)
     cdata = view(V.data, idxs, k)
     cres  = view(strbuf.buf_cres, 1:length(idxs))
@@ -166,7 +179,7 @@ function cnll_str(V::SingletonVecchiaApproximation{M,D,F}, j::Int,
     for (j, cj) in enumerate(cpts)
       cres[j] -= V.meanfun(cj, params) 
     end
-    icvar*(V.data[j,k] - dot(cres, kwts))^2
+    icvar*((V.data[j,k] - meanj) - dot(cres, kwts))^2
   end
   (log(cvar), qforms)
 end
