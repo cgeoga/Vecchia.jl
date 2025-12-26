@@ -43,7 +43,7 @@ using ForwardDiff, NLPModels, UnoSolver
 
 # Specify a solver and hand everything to vecchia_estimate.
 solver = NLPModelsSolver(uno; preset="filtersqp")
-mle    = vecchia_estimate(cfg, some_init, solver)
+mle    = vecchia_estimate(appx, some_init, solver)
 
 # perhaps now you wanted to predict with your fitted model?
 # (see the docstrings for options, but hopefully the defaults will serve you well!)
@@ -71,7 +71,7 @@ meanfun(x, params)   = # manually uses params[1:whatever_it_needs]
 then you should additionally modify your estimation code with
 ```julia
 fancy_init = Parameters(cov_init, mean_init)
-mle    = vecchia_estimate(cfg, fancy_init, solver)
+mle    = vecchia_estimate(appx, fancy_init, solver)
 ```
 Now what comes back will be a `Vecchia.Parameters` object, which has separate
 fields `.cov_params` and `.mean_params`. You can also hand that object right to
