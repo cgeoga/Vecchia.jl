@@ -6,8 +6,10 @@ module Vecchia
   # from Distances.jl
   export Euclidean, Haversine
 
+  import Base.Threads: @spawn, nthreads
+
   include("vecchia_config.jl")
-  export VecchiaApproximation, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning, Parameters
+  export VecchiaApproximation, ZeroMean, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning, Parameters
 
   include("utils.jl")
 

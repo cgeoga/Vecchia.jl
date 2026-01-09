@@ -82,7 +82,7 @@ KNNConditioning(k::Int64) = KNNConditioning(k, Euclidean())
 
 
 """
-  `VecchiaApproximation(pts, kernel, data=nothing; ordering::PointEnumeration, predictionsets::PredictionSetDesign, conditioning::ConditioningSetDesign)
+  `VecchiaApproximation(pts, kernel, data=nothing; meanfun=ZeroMean(), ordering::PointEnumeration, predictionsets::PredictionSetDesign, conditioning::ConditioningSetDesign)
 
 The primary object of this package that specifies and prepares the point ordering, prediction set, and conditioning set design. Arguments are:
 
@@ -92,6 +92,7 @@ The primary object of this package that specifies and prepares the point orderin
 
 Keyword arguments, which specify details of the approximation, are:
 
+- `meanfun`: a function (or functor) with signature `meanfun(x::SVector{D,Float64}, params)` that returns the mean `E[ your_gp(x) ]`. Note that you have two options evaluating the log-likelihood, one that uses the `Parameters` object that splits mean and covariance function parameters for you (so that each of the two functions can index their own parameter list the natural way) and one that just passes in a flat `Vector{T}`, in which case you manage the indexing yourself. See the example files, the README, and below for more information.
 - `ordering::PointEnumeration`: an option indicating how, if at all, you would like points to be reordered. The default option is `RandomOrdering()` in 2+D and canonical sorting in 1D, but there is also `NoPermutation()`. Extensions may provide additional routines.
 - `predictionsets::PredictionSetDesign`: an option indicating whether you want to predict single values (`SingletonPredictionSets()`, the default) or chunked prediction sets (not currently available, as legacy code has been removed but not yet ported to an extension).
 - `conditioning::ConditioningSetDesign`: an option indicating how you want to determine conditioning sets. The default is `KNNConditioningSets(10)`. Additional methods may be made available via package extensions.

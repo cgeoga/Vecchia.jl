@@ -7,7 +7,7 @@ function exact_nll(cfg::Vecchia.SingletonVecchiaApproximation, p)
   Vecchia.generic_dense_nll(S, cfg.data - mu)
 end
 
-function singleton_to_exact(c::Vecchia.SingletonVecchiaApproximation)
+function singleton_to_chunk(c::Vecchia.SingletonVecchiaApproximation)
   sp = Vecchia.SingletonPredictionSets()
   (pts_ch, data_ch) = Vecchia.chunk_format_points_and_data(c.pts, c.data, sp)
   Vecchia.ChunkedVecchiaApproximation(c.meanfun, c.kernel, data_ch, 
@@ -34,7 +34,7 @@ appx1  = VecchiaApproximation(pts, kernel, sim1;
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
 
-appx1c = singleton_to_exact(appx1)
+appx1c = singleton_to_chunk(appx1)
 
 appx2  = VecchiaApproximation(pts, kernel, sim2; 
                               meanfun=meanfun,

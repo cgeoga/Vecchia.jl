@@ -187,7 +187,7 @@ end
 
 function allocate_crchol_bufs(V::ChunkedVecchiaApproximation{M,D,F}, 
                               cpts_sz, pts_sz) where{M,D,F}
-  [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:Threads.nthreads()]
+  [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:nthreads()]
 end
 
 function _rchol_instantiate_index!(strbuf::RCholeskyStorage, 
@@ -279,15 +279,15 @@ function rchol_instantiate!(strbuf::RCholeskyStorage,
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
   # allocate three buffers:
-  nthr = Threads.nthreads()
+  nthr = nthreads()
   bufs = allocate_crchol_bufs(V, cpts_sz, pts_sz)
   # do the main loop:
-  m = cld(length(V.condix), Threads.nthreads())
+  m = cld(length(V.condix), nthreads())
   blas_nthr = BLAS.get_num_threads()
   BLAS.set_num_threads(1)
   chunks = collect(Iterators.partition(1:length(V.condix), m))
   @sync for (i, chunk) in enumerate(chunks)
-    Threads.@spawn for j in chunk
+    @spawn for j in chunk
       # confirmed non-allocating.
       _rchol_instantiate_index!(strbuf, V, bufs, i, j, params, tiles)
     end
@@ -352,7 +352,7 @@ end
 function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,D,F},
                            buffers, chunks, params, vixs) where{M,D,F}
   @sync for (i, chunk) in enumerate(chunks)
-    Threads.@spawn begin
+    @spawn begin
       bufi = buffers[i]
       for j in chunk
         valj = view(valbuf, vixs[j])
@@ -396,7 +396,7 @@ function _rchol(V::SingletonVecchiaApproximation{M,D,F}, params) where{M,D,F}
     current_ix = cix[end]+1
   end
   # split the work into chunks and pre-allocate work buffers.
-  chunks  = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
+  chunks  = collect(Iterators.partition(1:n, cld(n, nthreads())))
   buffers = [cnllbuf(V, params) for _ in 1:length(chunks)]
   # with everything allocated, hand to the non-allocating routine.
   blas_nthr = BLAS.get_num_threads()

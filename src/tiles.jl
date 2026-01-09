@@ -35,10 +35,10 @@ end
 function update_tile_buffers!(tiles::CovarianceTiles{T}, pts, kernel::F, 
                               indices::Vector{Tuple{Int64, Int64}}, p) where{T,F}
   store = tiles.store
-  m = cld(length(store), Threads.nthreads())
+  m = cld(length(store), nthreads())
   index_chunks = Iterators.partition(eachindex(indices), m)
   @sync for ixs in index_chunks
-    Threads.@spawn for j in ixs
+    @spawn for j in ixs
       (_j, _k)   = indices[j]
       (ptj, ptk) = (pts[_j], pts[_k])
       buf = store[(_j,_k)]

@@ -67,7 +67,7 @@ function predict(vp::VecchiaPrediction{M,D,F}, cov_params, mean_params;
   U_cross = U[(1:vp.n),ixs]
   U_pred  = UpperTriangular(U[ixs, ixs])
   mu      = [jva.meanfun(x, mean_params) for x in jva.pts]
-  z       = -U_cross'*(vp.data - mu[1:vp.n])
+  z       = -(U_cross'*(vp.data - mu[1:vp.n]))
   conditional_simulate && (z .+= randn(length(z)))
   cmean   = U_pred'\z + mu[(vp.n+1):end]
   cmean[invperm(vp.pred_perm)] 
