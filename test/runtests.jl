@@ -82,3 +82,12 @@ end
   @test maximum(abs, pre'\(pre\v) - M*v) < 1e-10
 end
 
+@testset "lazy_rchol mul" begin
+  U   = rchol(appx1, [1.0, 0.01])
+  lU  = lazy_rchol(appx1, [1.0, 0.01])
+  v1  = collect(1.0:length(pts))
+  v5  = Float64.([j+k for j in 1:length(pts), k in 1:5])
+  @test maximum(abs, U*v1 - lU*v1) < 1e-12
+  @test maximum(abs, U*v5 - lU*v5) < 1e-12
+end
+

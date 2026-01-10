@@ -37,7 +37,22 @@ function LinearAlgebra.mul!(buf::AbstractVector, rc::RCholesky, v::AbstractVecto
   permute!(buf, rc.ip)
 end
 
+function LinearAlgebra.mul!(buf::AbstractMatrix, rc::RCholesky, v::AbstractMatrix)
+  mul!(buf, rc.U, v)
+  foreach(cj->permute!(cj, rc.ip), eachcol(buf))
+  buf
+end
+
+# I have to define this method specifically, because without type annotations on
+# v it is ambiguous. That's pretty annoying.
 function Base.:*(rc::RCholesky, v::AbstractVector)
+  buf = similar(v)
+  mul!(buf, rc, v)
+end
+
+# I have to define this method specifically, because without type annotations on
+# v it is ambiguous. That's pretty annoying.
+function Base.:*(rc::RCholesky, v::AbstractMatrix)
   buf = similar(v)
   mul!(buf, rc, v)
 end
@@ -51,7 +66,26 @@ function LinearAlgebra.mul!(buf::AbstractVector,
   mul!(buf, rc.U', rc.buf)
 end
 
+function LinearAlgebra.mul!(buf::AbstractMatrix, 
+                            arc::Adjoint{Float64, RCholesky}, 
+                            v::AbstractMatrix)
+  rc = arc.parent
+  copyto!(rc.buf, v)
+  foreach(cj->permute!(cj, rc.p), eachcol(rc.buf))
+  mul!(buf, rc.U', rc.buf)
+end
+
+# I have to define this method specifically, because without type annotations on
+# v it is ambiguous. That's pretty annoying.
 function Base.:*(arc::Adjoint{Float64, RCholesky}, v::AbstractVector)
+  rc  = arc.parent
+  buf = similar(v)
+  mul!(buf, arc, v)
+end
+
+# I have to define this method specifically, because without type annotations on
+# v it is ambiguous. That's pretty annoying.
+function Base.:*(arc::Adjoint{Float64, RCholesky}, v::AbstractMatrix)
   rc  = arc.parent
   buf = similar(v)
   mul!(buf, arc, v)
@@ -128,6 +162,42 @@ function LinearAlgebra.mul!(buf::AbstractVector,
   permute!(rc.buf, rc.ip)
   copyto!(buf, rc.buf)
 end
+
+# For now, hard-coded for singleton.
+struct LazyRCholesky{C,T}
+  cfg::C # the actual VecchiaApproximation object
+  params::Vector{T} # a parameter of (potentially-valued) parameters.
+  kwtbuffers::Vector{SingletonCondLogLikBuf{T}}
+  outbuffers::Vector{Vector{T}}
+  chunk_ixs::Vector{UnitRange{Int64}}
+  ip::Vector{Int64}
+end
+
+Base.size(lrc::LazyRCholesky) = length(lrc.cfg.condix)
+Base.size(lrc::LazyRCholesky, j) = 1 <= j <= 2 ? size(lrc)[j] : 1
+Base.eltype(lrc::LazyRCholesky{C,T}) where{C,T} = T
+
+function LinearAlgebra.mul!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T}, 
+                            v::AbstractVector) where{C,T}
+  lazy_rchol_apply!(buf, lrc, v)
+  permute!(buf, lrc.ip)
+end
+
+function LinearAlgebra.mul!(buf::AbstractMatrix{T}, lrc::LazyRCholesky{C,T}, 
+                            v::AbstractMatrix) where{C,T}
+  size(buf, 2) == size(v, 2) || throw(error("result and input matrices don't have the same number of columns!"))
+  foreach(j->mul!(view(buf, :, j), lrc, view(v, :, j)), 1:size(v, 2))
+  buf
+end
+
+function Base.:*(lrc::LazyRCholesky{C,T}, v) where{C,T}
+  G   = promote_type(eltype(v), T)
+  out = Array{G}(undef, size(v))
+  mul!(out, lrc, v)
+end
+
+LinearAlgebra.issymmetric(rc::LazyRCholesky) = false
+LinearAlgebra.ishermitian(rc::LazyRCholesky) = false
 
 struct RCholeskyStorage
   diagonals::Vector{UpperTriangular{Float64,Matrix{Float64}}}
@@ -373,6 +443,37 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,D,F},
   nothing
 end
 
+function lazy_rchol_apply!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T}, 
+                           v::AbstractVector) where{C,T}
+  chunks     = lrc.chunk_ixs
+  kwtbuffers = lrc.kwtbuffers
+  outbuffers = lrc.outbuffers
+  cfg        = lrc.cfg
+  foreach(v->fill!(v, zero(eltype(v))), outbuffers)
+  # do all the paralel 
+  @sync for (i, chunk) in enumerate(chunks)
+    @spawn begin
+      kwtbufi = kwtbuffers[i]
+      outbufi = outbuffers[i]
+      for j in chunk
+        vj   = v[j]
+        cixj = cfg.condix[j]
+        cvar = Vecchia.prepare_conditional!(kwtbufi, j, cfg, lrc.params)
+        isqrt_cvar  = inv(sqrt(cvar))
+        outbufi[j] += vj*isqrt_cvar
+        if !isempty(cixj)
+          kwts   = view(kwtbufi.buf_kwts, 1:length(cixj))
+          kwts .*= -isqrt_cvar*vj
+          foreach(k->(outbufi[cixj[k]] += kwts[k]), eachindex(cixj))
+        end
+      end
+    end
+  end
+  fill!(buf, zero(eltype(buf)))
+  foreach(v->(buf .+= v), outbuffers)
+  buf
+end
+
 function _rchol(V::SingletonVecchiaApproximation{M,D,F}, params) where{M,D,F}
   n   = length(V.pts)
   # pre-allocate the COO format (I,J,V), like the output from findnz(sparse_matrix).
@@ -456,3 +557,18 @@ function rchol_preconditioner(V::SingletonVecchiaApproximation{M,D,F},
                           Array{Float64}(undef, length(V.pts)))
 end
 
+"""
+`lazy_rchol(cfg::VecchiaApproximation, params)::LazyRCholesky`
+
+Build a *lazy* `RCholesky` analog. Unlike `rchol` or `rchol_preconditioner`, this object does **not** actual build the sparse matrix. The resulting object effectively only implements `*` and `mul!` (and core things like `size` and `eltype` and so on). The purpose of this object is to use it in settings where (1) you will only need to do one matvec/mat-mat operation for any given `params`, and (2) you want to run AD like `ForwardDiff.jl` through the `mul!`. 
+"""
+function lazy_rchol end
+
+function lazy_rchol(cfg::SingletonVecchiaApproximation,
+                    params::Vector{T}) where{T}
+  n          = length(cfg.pts)
+  chunks     = collect(Iterators.partition(1:n, cld(n, nthreads())))
+  kwtbuffers = [cnllbuf(cfg, params) for _ in 1:length(chunks)]
+  outbuffers = [Vector{T}(undef, n) for _ in 1:length(chunks)]
+  LazyRCholesky(cfg, params, kwtbuffers, outbuffers, chunks, invperm(cfg.perm)) 
+end

@@ -21,7 +21,7 @@ module Vecchia
   include("nll.jl")
 
   include("rcholesky.jl")
-  export rchol, rchol_preconditioner
+  export rchol, rchol_preconditioner, lazy_rchol
 
   include("extensions.jl")
   export NLPModelsSolver, vecchia_estimate, vecchia_estimate_nugget

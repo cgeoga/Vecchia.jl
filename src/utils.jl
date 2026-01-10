@@ -7,17 +7,6 @@ _square(x::Complex) = real(x*conj(x))
 
 _mean(x) = sum(x)/length(x)
 
-# Given data x_init that has been re-ordered to x_sorted, this gives a vector p
-# such that x_init[p] == x_sorted.
-function outer_to_inner_perm(x_init, x_sorted)
-  lookup = Dict(zip(x_init, eachindex(x_init)))
-  [lookup[x] for x in x_sorted]
-end
-
-# Given data x_init that has been re-ordered to x_sorted, this gives a vector p
-# such that x_sorted[p] == x_init.
-inner_to_outer_perm(x_init, x_sorted) = invperm(outer_to_inner_perm(x_init, x_sorted))
-
 blockrank(cfg::VecchiaApproximation) = maximum(length, cfg.condix)
 chunksize(cfg::ChunkedVecchiaApproximation) = maximum(length, cfg.pts)
 
