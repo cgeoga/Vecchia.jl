@@ -178,13 +178,13 @@ Base.size(lrc::LazyRCholesky, j) = 1 <= j <= 2 ? size(lrc)[j] : 1
 Base.eltype(lrc::LazyRCholesky{C,T}) where{C,T} = T
 
 function LinearAlgebra.mul!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T}, 
-                            v::AbstractVector) where{C,T}
+                            v::AbstractVector{T}) where{C,T}
   lazy_rchol_apply!(buf, lrc, v)
   permute!(buf, lrc.ip)
 end
 
 function LinearAlgebra.mul!(buf::AbstractMatrix{T}, lrc::LazyRCholesky{C,T}, 
-                            v::AbstractMatrix) where{C,T}
+                            v::AbstractMatrix{T}) where{C,T}
   size(buf, 2) == size(v, 2) || throw(error("result and input matrices don't have the same number of columns!"))
   foreach(j->mul!(view(buf, :, j), lrc, view(v, :, j)), 1:size(v, 2))
   buf
@@ -193,7 +193,7 @@ end
 function Base.:*(lrc::LazyRCholesky{C,T}, v) where{C,T}
   G   = promote_type(eltype(v), T)
   out = Array{G}(undef, size(v))
-  mul!(out, lrc, v)
+  mul!(out, lrc, G.(v))
 end
 
 LinearAlgebra.issymmetric(rc::LazyRCholesky) = false
@@ -426,7 +426,7 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,D,F},
       bufi = buffers[i]
       for j in chunk
         valj = view(valbuf, vixs[j])
-        cvar = Vecchia.prepare_conditional!(bufi, j, V, params)
+        cvar = prepare_conditional!(bufi, j, V, params)
         idxs = V.condix[j]
         if isempty(idxs)
           valj[1] = inv(sqrt(cvar))
@@ -443,34 +443,34 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,D,F},
   nothing
 end
 
-function lazy_rchol_apply!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T}, 
-                           v::AbstractVector) where{C,T}
-  chunks     = lrc.chunk_ixs
-  kwtbuffers = lrc.kwtbuffers
-  outbuffers = lrc.outbuffers
-  cfg        = lrc.cfg
-  foreach(v->fill!(v, zero(eltype(v))), outbuffers)
-  # do all the paralel 
-  @sync for (i, chunk) in enumerate(chunks)
-    @spawn begin
-      kwtbufi = kwtbuffers[i]
-      outbufi = outbuffers[i]
-      for j in chunk
-        vj   = v[j]
-        cixj = cfg.condix[j]
-        cvar = Vecchia.prepare_conditional!(kwtbufi, j, cfg, lrc.params)
-        isqrt_cvar  = inv(sqrt(cvar))
-        outbufi[j] += vj*isqrt_cvar
-        if !isempty(cixj)
-          kwts   = view(kwtbufi.buf_kwts, 1:length(cixj))
-          kwts .*= -isqrt_cvar*vj
-          foreach(k->(outbufi[cixj[k]] += kwts[k]), eachindex(cixj))
-        end
-      end
+function lazy_rchol_apply_item!(lrc::LazyRCholesky{C,T}, 
+                                v::AbstractVector, i::Int)::Nothing where{C,T}
+  cfg     = lrc.cfg
+  kwtbufi = lrc.kwtbuffers[i]
+  outbufi = lrc.outbuffers[i]
+  for j in lrc.chunk_ixs[i]
+    vj   = v[j]
+    cixj = cfg.condix[j]
+    cvar = prepare_conditional!(kwtbufi, j, cfg, lrc.params)
+    isqrt_cvar  = inv(sqrt(cvar))
+    outbufi[j] += vj*isqrt_cvar
+    if !isempty(cixj)
+      kwts   = view(kwtbufi.buf_kwts, 1:length(cixj))
+      kwts .*= -isqrt_cvar*vj
+      foreach(k->(outbufi[cixj[k]] += kwts[k]), eachindex(kwts, cixj))
     end
   end
+  nothing
+end
+
+function lazy_rchol_apply!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T}, 
+                           v::AbstractVector{T}) where{C,T}
+  foreach(v->fill!(v, zero(eltype(v))), lrc.outbuffers)
+  @sync for i in eachindex(lrc.chunk_ixs)
+    @spawn lazy_rchol_apply_item!(lrc, v, i)
+  end
   fill!(buf, zero(eltype(buf)))
-  foreach(v->(buf .+= v), outbuffers)
+  foreach(v->(buf .+= v), lrc.outbuffers)
   buf
 end
 
