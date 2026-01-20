@@ -419,8 +419,8 @@ function _rchol(V::ChunkedVecchiaApproximation{M,D,F}, params;
   rchol_instantiate!(out, V, params, tiles)
 end
 
-function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,D,F},
-                           buffers, chunks, params, vixs) where{M,D,F}
+function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,P,F},
+                           buffers, chunks, params, vixs) where{M,P,F}
   @sync for (i, chunk) in enumerate(chunks)
     @spawn begin
       bufi = buffers[i]
@@ -474,7 +474,7 @@ function lazy_rchol_apply!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T},
   buf
 end
 
-function _rchol(V::SingletonVecchiaApproximation{M,D,F}, params) where{M,D,F}
+function _rchol(V::SingletonVecchiaApproximation{M,P,F}, params) where{M,P,F}
   n   = length(V.pts)
   # pre-allocate the COO format (I,J,V), like the output from findnz(sparse_matrix).
   nnz = sum(length, V.condix) + length(V.condix)
@@ -524,8 +524,8 @@ function rchol(V::ChunkedVecchiaApproximation{M,D,F}, params;
             Array{Float64}(undef, length(V.pts)))
 end
 
-function rchol(V::SingletonVecchiaApproximation{M,D,F}, params; 
-               use_tiles=false) where{M,D,F}
+function rchol(V::SingletonVecchiaApproximation{M,P,F}, params; 
+               use_tiles=false) where{M,P,F}
   use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
   out = _rchol(V, params)
   RCholesky(out, V.perm, invperm(V.perm),
@@ -549,8 +549,8 @@ function rchol_preconditioner(V::ChunkedVecchiaApproximation{M,D,F},
                           Array{Float64}(undef, length(V.pts)))
 end
 
-function rchol_preconditioner(V::SingletonVecchiaApproximation{M,D,F},
-                              params; use_tiles=false) where{M,D,F}
+function rchol_preconditioner(V::SingletonVecchiaApproximation{M,P,F},
+                              params; use_tiles=false) where{M,P,F}
   use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
   out = _rchol(V, params)
   RCholeskyPreconditioner(out, V.perm, invperm(V.perm),

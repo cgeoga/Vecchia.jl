@@ -35,8 +35,8 @@ struct SingletonCondLogLikBuf{T}
   results::Vector{T} # [1] is logdets, [2] is qforms.
 end
 
-function cnllbuf(V::SingletonVecchiaApproximation{M,D,F},
-                 params::AbstractVector{T}) where{M,D,F,T}
+function cnllbuf(V::SingletonVecchiaApproximation{M,P,F},
+                 params::AbstractVector{T}) where{M,P,F,T}
   cpts_sz  = maximum(length, V.condix)
   buf_cc   = Matrix{T}(undef, (cpts_sz, cpts_sz))
   buf_cp   = Vector{T}(undef, cpts_sz)
@@ -79,8 +79,8 @@ function _nll(V, cov_params::AbstractVector{T},
   (total_logdets + total_qforms)/2
 end
 
-function (V::VecchiaApproximation{M,D,F})(p; cov_param_ixs=1:length(p),
-                                          mean_param_ixs=1:length(p)) where{M,D,F}
+function (V::VecchiaApproximation{M,P,F})(p; cov_param_ixs=1:length(p),
+                                          mean_param_ixs=1:length(p)) where{M,P,F}
   nll(V, p; cov_param_ixs, mean_param_ixs)
 end
 
@@ -146,8 +146,8 @@ end
 # pulling this functionality out because it can be reused in the simpler rchol
 # in the singleton case.
 function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
-                              V::SingletonVecchiaApproximation{M,D,F},
-                              cov_params::AbstractVector{T}) where{M,D,F,T}
+                              V::SingletonVecchiaApproximation{M,P,F},
+                              cov_params::AbstractVector{T}) where{M,P,F,T}
   ptj   = V.pts[j]
   covjj = V.kernel(ptj, ptj, cov_params)
   idxs  = V.condix[j]
@@ -164,9 +164,9 @@ function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
 end
 
 function cnll_str!(strbuf::SingletonCondLogLikBuf{T},
-                  V::SingletonVecchiaApproximation{M,D,F}, j::Int,
-                  cov_params::AbstractVector{T},
-                  mean_params::AbstractVector{T})::Nothing where{M,D,F,T}
+                   V::SingletonVecchiaApproximation{M,P,F}, j::Int,
+                   cov_params::AbstractVector{T},
+                   mean_params::AbstractVector{T})::Nothing where{M,P,F,T}
   ndata = size(V.data, 2)
   ptj   = V.pts[j]
   meanj = V.meanfun(ptj, mean_params)

@@ -31,11 +31,11 @@ end
 #
 # Maybe worth trying the Channel-based threading model for both because it would
 # be so simple?
-struct SingletonVecchiaApproximation{M,D,F} <: VecchiaApproximation{M,D,F}
+struct SingletonVecchiaApproximation{M,P,F} <: VecchiaApproximation{M,P,F}
   meanfun::M
   kernel::F
   data::Union{Nothing, Matrix{Float64}} 
-  pts::Vector{SVector{D, Float64}}
+  pts::Vector{P}
   condix::Vector{Vector{Int64}} 
   perm::Vector{Int64}
 end
@@ -72,13 +72,21 @@ RandomOrdering() = RandomOrdering(Random.default_rng())
 abstract type PredictionSetDesign end
 struct SingletonPredictionSets <: PredictionSetDesign end
 
+struct ChunkedPredictionSets <: PredictionSetDesign
+  chunksize::Int
+end
+
 abstract type ConditioningSetDesign end
-struct KNNConditioning{M} <: PredictionSetDesign 
+struct KNNConditioning{M} <: ConditioningSetDesign 
   k::Int64
   metric::M
 end
 
 KNNConditioning(k::Int64) = KNNConditioning(k, Euclidean())
+
+struct KPastIndicesConditioning <: ConditioningSetDesign
+  k::Int
+end
 
 
 """
@@ -86,13 +94,13 @@ KNNConditioning(k::Int64) = KNNConditioning(k, Euclidean())
 
 The primary object of this package that specifies and prepares the point ordering, prediction set, and conditioning set design. Arguments are:
 
-- `pts::Vector{SVector{D,Float64}}`: the locations at which your process was measured.
-- `kernel::K`: your covariance function, which implements the method `(kernel)(x::SVector{D,Float64}, y::SVector{D,Float64}, params)`.
+- `pts::Vector{P}`: the locations at which your process was measured.
+- `kernel::K`: your covariance function, which implements the method `(kernel)(x::P, y::P, params)`.
 - `data::Union{Nothing, Matrix{Float64}}`: an option to provide data. If you are fitting a model, provide your data as a matrix where each **column** is an iid replicate. If you are just building a sparse precision matrix, you do not need to adjust this kwarg.
 
 Keyword arguments, which specify details of the approximation, are:
 
-- `meanfun`: a function (or functor) with signature `meanfun(x::SVector{D,Float64}, params)` that returns the mean `E[ your_gp(x) ]`. Note that you have two options evaluating the log-likelihood, one that uses the `Parameters` object that splits mean and covariance function parameters for you (so that each of the two functions can index their own parameter list the natural way) and one that just passes in a flat `Vector{T}`, in which case you manage the indexing yourself. See the example files, the README, and below for more information.
+- `meanfun`: a function (or functor) with signature `meanfun(x::P, params)` that returns the mean `E[ your_gp(x) ]`. Note that you have two options evaluating the log-likelihood, one that uses the `Parameters` object that splits mean and covariance function parameters for you (so that each of the two functions can index their own parameter list the natural way) and one that just passes in a flat `Vector{T}`, in which case you manage the indexing yourself. See the example files, the README, and below for more information.
 - `ordering::PointEnumeration`: an option indicating how, if at all, you would like points to be reordered. The default option is `RandomOrdering()` in 2+D and canonical sorting in 1D, but there is also `NoPermutation()`. Extensions may provide additional routines.
 - `predictionsets::PredictionSetDesign`: an option indicating whether you want to predict single values (`SingletonPredictionSets()`, the default) or chunked prediction sets (not currently available, as legacy code has been removed but not yet ported to an extension).
 - `conditioning::ConditioningSetDesign`: an option indicating how you want to determine conditioning sets. The default is `KNNConditioningSets(10)`. Additional methods may be made available via package extensions.

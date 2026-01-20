@@ -1,4 +1,12 @@
 
+#
+# Permutation methods:
+#
+
+function permute_points_and_data(pts, data, ::NoPermutation)
+  (collect(eachindex(pts)), pts, data) 
+end
+
 function permute_points_and_data(pts::Vector{SVector{D,Float64}}, 
                                  data, ::NoPermutation) where{D}
   if isone(D)
@@ -21,6 +29,10 @@ function permute_points_and_data(pts, data, ordering::RandomOrdering)
   pts_perm  = pts[perm]
   (perm, pts_perm, data_perm)
 end
+
+#
+# Conditioning set computation methods:
+#
 
 function hnsw_conditioningsets(pts::Vector{SVector{D,Float64}}, 
                                design::KNNConditioning{M}) where{D,M}
@@ -52,21 +64,29 @@ function conditioningsets(pts::Vector{SVector{D,Float64}},
   end
 end
 
-function conditioningsets(pts::Vector{SVector{1,Float64}}, 
-                          design::KNNConditioning{Euclidean})
-  condix = Vector{Vector{Int64}}(undef, length(pts))
-  condix[1] = Float64[]
-  for j in 2:length(pts)
-    condix[j] = collect(max(1, j-design.k):(j-1))
-  end
-  condix
+function conditioningsets(pts, design::KPastIndicesConditioning)
+  [collect(max(1, j-design.k):(j-1)) for j in eachindex(pts)]
 end
 
+function conditioningsets(pts::Vector{SVector{1,Float64}}, 
+                          design::KNNConditioning{Euclidean})
+  issorted(getindex.(pts, 1)) || error("For 1D points, please use the canonical sorting or create your approximation objection manually (for now, at least).")
+  conditioningsets(pts, KPastIndicesConditioning(design.k))
+end
 
+function default_ordering(pts) 
+  @info "For locations that aren't `::SVector{D,Float64}`, the default ordering is `NoPermutation()`. Please be mindful of whether or not that is appropriate for your application." maxlog=1
+  NoPermutation()
+end
 default_ordering(pts::Vector{SVector{1,Float64}}) = Sorted1D()
 default_ordering(pts::Vector{SVector{D,Float64}}) where{D} = RandomOrdering()
 
 default_predictionsets() = SingletonPredictionSets()
+
+function default_conditioning(pts) 
+  @info "For locations that aren't `::SVector{D,Float64}`, the default conditioning design is `KPastIndicesConditioning(10)`. Please be mindful of whether or not that is appropriate for your application." maxlog=1
+  KPastIndicesConditioning(10)
+end
 
 function default_conditioning(pts::Vector{SVector{1,Float64}}) 
   KNNConditioning(5, Euclidean())
@@ -76,12 +96,11 @@ function default_conditioning(pts::Vector{SVector{D,Float64}}) where{D}
   KNNConditioning(10, Euclidean())
 end
 
-function VecchiaApproximation(pts::Vector{SVector{D,Float64}},
-                              kernel::K, data=nothing;
+function VecchiaApproximation(pts, kernel, data=nothing;
                               meanfun=ZeroMean(),
                               ordering=default_ordering(pts),
                               predictionsets=default_predictionsets(),
-                              conditioning=default_conditioning(pts)) where{D,K}
+                              conditioning=default_conditioning(pts))
   if predictionsets isa SingletonPredictionSets
     singleton_approximation(pts, kernel, data; meanfun, ordering, conditioning)
   else
@@ -96,12 +115,11 @@ function chunk_format_points_and_data(pts, data, ::SingletonPredictionSets)
   (pts_str, data_str)
 end
 
-function chunked_approximation(pts::Vector{SVector{D,Float64}},
-                               kernel::K, data=nothing;
+function chunked_approximation(pts,kernel, data=nothing;
                                meanfun=ZeroMean(),
                                ordering=default_ordering(pts),
                                predictionsets=default_predictionsets(),
-                               conditioning=default_conditioning(pts)) where{D,K}
+                               conditioning=default_conditioning(pts))
   (perm, _pts_perm, _data_perm) = permute_points_and_data(pts, data, ordering)
   condix = conditioningsets(_pts_perm, conditioning)
   (pts_ch, data_ch) = chunk_format_points_and_data(_pts_perm, _data_perm, 
@@ -109,11 +127,10 @@ function chunked_approximation(pts::Vector{SVector{D,Float64}},
   ChunkedVecchiaApproximation(meanfun, kernel, data_ch, pts_ch, condix, perm)
 end
 
-function singleton_approximation(pts::Vector{SVector{D,Float64}},
-                                 kernel::K, data=nothing;
+function singleton_approximation(pts, kernel, data=nothing;
                                  meanfun=ZeroMean(),
                                  ordering=ordering,
-                                 conditioning=conditioning) where{D,K}
+                                 conditioning=conditioning)
   (perm, pts_perm, data_perm) = permute_points_and_data(pts, data, ordering)
   data_perm = isnothing(data_perm) ? [NaN;;] : hcat(data_perm)
   condix    = conditioningsets(pts_perm, conditioning)
