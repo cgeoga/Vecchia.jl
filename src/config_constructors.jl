@@ -51,6 +51,12 @@ function sknn_conditioningsets end
 
 function conditioningsets(pts::Vector{SVector{D,Float64}}, 
                           design::KNNConditioning{M}) where{D,M}
+  if D == 1
+    if issorted(getindex.(pts, 1)) 
+      return conditioningsets(pts, KPastIndicesConditioning(design.k))
+    end
+    @warn "For 1D locations, there is a canonical ordering. Both for speed and accuracy, consider instead sorting your points and using `ordering=NoPermutation()` and `conditioning=KPastIndicesConditioning(k)`." maxlog=1
+  end
   # if available, using the _extremely_ fast knn conditioning set design
   # routines from the sequentialknn_jll dependency.
   has_ext = length(methods(sknn_conditioningsets)) > 0
@@ -66,12 +72,6 @@ end
 
 function conditioningsets(pts, design::KPastIndicesConditioning)
   [collect(max(1, j-design.k):(j-1)) for j in eachindex(pts)]
-end
-
-function conditioningsets(pts::Vector{SVector{1,Float64}}, 
-                          design::KNNConditioning{Euclidean})
-  issorted(getindex.(pts, 1)) || error("For 1D points, please use the canonical sorting or create your approximation objection manually (for now, at least).")
-  conditioningsets(pts, KPastIndicesConditioning(design.k))
 end
 
 function default_ordering(pts) 

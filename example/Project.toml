@@ -1,8 +1,6 @@
 [deps]
 BesselK = "432ab697-7a72-484f-bc4a-bc531f5c819b"
-DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-HNSW = "540f64fa-c57e-11e8-081c-41422cda4629"
 Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
@@ -11,6 +9,3 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 UnoSolver = "1baa60ac-02f7-4b39-a7a8-2f4f58486b05"
 Vecchia = "8d73829f-f4b0-474a-9580-cecc8e084068"
 sequentialknn_jll = "a3d66c5c-fa88-5e7c-8b67-86d01549c065"
-
-[sources]
-Vecchia = {path = ".."}

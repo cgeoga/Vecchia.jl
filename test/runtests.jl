@@ -1,5 +1,7 @@
 
-using Test, LinearAlgebra, StaticArrays, StableRNGs, Vecchia
+using Vecchia
+using Vecchia.LinearAlgebra
+using Test, StaticArrays, StableRNGs
 
 function exact_nll(cfg::Vecchia.SingletonVecchiaApproximation, p)
   S   = [cfg.kernel(x, y, p) for x in cfg.pts, y in cfg.pts]

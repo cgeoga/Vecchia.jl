@@ -1,9 +1,10 @@
 
 module VecchiaForwardDiffExt
 
-  using Printf, LinearAlgebra, Vecchia, ForwardDiff
+  using LinearAlgebra, Vecchia, ForwardDiff
 
   #=
+  using Printf
   # this is just temporary for the Uno issue.
   function temporary_print(x, case)
     if case == :primal

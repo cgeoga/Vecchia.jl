@@ -1,7 +1,7 @@
 
 module Vecchia
 
-  using Random, LinearAlgebra, SparseArrays, StaticArrays, Distances, HNSW
+  using Random, LinearAlgebra, SparseArrays, StaticArraysCore, Distances, HNSW
 
   # from Distances.jl
   export Euclidean, Haversine
