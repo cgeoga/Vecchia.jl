@@ -30,6 +30,16 @@ function permute_points_and_data(pts, data, ordering::RandomOrdering)
   (perm, pts_perm, data_perm)
 end
 
+function _hilbert_permutation end
+
+function permute_points_and_data(pts, data, ordering::HilbertCurveOrdering)
+  if iszero(length(methods(_hilbert_permutation)))
+    error("please `]add GeometricalPredicates` and `using` it to load the necessary extension.")
+  end
+  perm = _hilbert_permutation(pts)
+  (perm, pts[perm], (isnothing(data) ? nothing : data[perm,:]))
+end
+
 #
 # Conditioning set computation methods:
 #

@@ -9,7 +9,7 @@ module Vecchia
   import Base.Threads: @spawn, nthreads
 
   include("vecchia_config.jl")
-  export VecchiaApproximation, ZeroMean, Sorted1D, RandomOrdering, NoPermutation, SinglePredictionSets, KNNConditioning, Parameters
+  export VecchiaApproximation, ZeroMean, Sorted1D, RandomOrdering, NoPermutation, HilbertCurveOrdering, SinglePredictionSets, KNNConditioning, KPastIndicesConditioning, Parameters
 
   include("utils.jl")
 

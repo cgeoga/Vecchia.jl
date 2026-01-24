@@ -20,8 +20,8 @@ end
 # number of elements in the lower triangle of an n x n matrix.
 ltrisz(n) = div(n*(n+1), 2)
 
-function updatebuf!(buf::AbstractMatrix, pts::AbstractVector{SVector{D,Float64}},
-                    kfun::F, params) where{D,F}
+function updatebuf!(buf::AbstractMatrix, pts::AbstractVector{P},
+                    kfun::F, params) where{P,F}
   for k in eachindex(pts)
     for j in 1:k
       buf[j,k] = kfun(pts[j], pts[k], params)
@@ -39,9 +39,9 @@ end
 # nll function itself will be using threads, and in my benchmarking putting
 # threaded constructors here slows things down a bit and increases allocations.
 function updatebuf!(buf::AbstractMatrix, 
-                    pts1::AbstractVector{SVector{D,Float64}}, 
-                    pts2::AbstractVector{SVector{D,Float64}}, 
-                    kfun::F, params; skipltri=false) where{D,F}
+                    pts1::AbstractVector{P}, 
+                    pts2::AbstractVector{P}, 
+                    kfun::F, params; skipltri=false) where{P,F}
   @inbounds begin
   if pts1 == pts2 && skipltri
     for k in eachindex(pts2)

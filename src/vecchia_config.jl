@@ -64,6 +64,7 @@ struct RandomOrdering{R} <: PointEnumeration
   rng::R
 end
 struct NoPermutation <: PointEnumeration  end
+struct HilbertCurveOrdering <: PointEnumeration end
 
 RandomOrdering() = RandomOrdering(Random.default_rng())
 
