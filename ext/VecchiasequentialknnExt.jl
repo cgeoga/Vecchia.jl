@@ -29,7 +29,6 @@ module VecchiasequentialknnExt
     if bucket > 4096
       throw(error("The required bucket size for this collection of points is prohibitively large. Unfortunately, this accelerated library wrapper does not currently support your use case."))
     end
-    @info "Using bucket size $bucket."
     @ccall libsequentialknn.sequential_knn(knn::Ptr{UInt64}, pts::Ptr{Float64},
                                            length(pts)::Csize_t, D::Csize_t, 
                                            bucket::Csize_t, k::Csize_t)::Cvoid
