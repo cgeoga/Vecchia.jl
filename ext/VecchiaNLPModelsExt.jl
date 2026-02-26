@@ -97,7 +97,10 @@ module VecchiaNLPModelsExt
                             box_lower=fill(0.0, length(init)),
                             box_upper=fill(Inf, length(init)))
     nlp = Vecchia.nlp(obj, init, box_lower=box_lower, box_upper=box_upper)
-    solver.solver(nlp; solver.opts...).solution
+    res = solver.solver(nlp; solver.opts...)
+    hasfield(typeof(res), :solution)        && return res.solution
+    hasfield(typeof(res), :primal_solution) && return res.primal_solution
+    error("The returned result from your solver doesn't have the field :solution or :primal_solution.")
   end
 
 end
