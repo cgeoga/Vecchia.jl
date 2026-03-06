@@ -145,9 +145,9 @@ end
 
 # pulling this functionality out because it can be reused in the simpler rchol
 # in the singleton case.
-function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T}, j::Int,
+function prepare_conditional!(strbuf::SingletonCondLogLikBuf{T},
                               V::SingletonVecchiaApproximation{M,P,F},
-                              cov_params::AbstractVector{T}) where{M,P,F,T}
+                              j::Int, cov_params::AbstractVector{T}) where{M,P,F,T}
   ptj   = V.pts[j]
   covjj = V.kernel(ptj, ptj, cov_params)
   idxs  = V.condix[j]
@@ -171,7 +171,7 @@ function cnll_str!(strbuf::SingletonCondLogLikBuf{T},
   ptj   = V.pts[j]
   meanj = V.meanfun(ptj, mean_params)
   idxs  = V.condix[j]
-  cvar  = prepare_conditional!(strbuf, j, V, cov_params)
+  cvar  = prepare_conditional!(strbuf, V, j, cov_params)
   icvar = inv(cvar)
   if isempty(idxs) 
     dataj  = view(V.data, j, :)

@@ -426,7 +426,7 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,P,F},
       bufi = buffers[i]
       for j in chunk
         valj = view(valbuf, vixs[j])
-        cvar = prepare_conditional!(bufi, j, V, params)
+        cvar = prepare_conditional!(bufi, V, j, params)
         idxs = V.condix[j]
         if isempty(idxs)
           valj[1] = inv(sqrt(cvar))
@@ -451,7 +451,7 @@ function lazy_rchol_apply_item!(lrc::LazyRCholesky{C,T},
   for j in lrc.chunk_ixs[i]
     vj   = v[j]
     cixj = cfg.condix[j]
-    cvar = prepare_conditional!(kwtbufi, j, cfg, lrc.params)
+    cvar = prepare_conditional!(kwtbufi, cfg, j, lrc.params)
     isqrt_cvar  = inv(sqrt(cvar))
     outbufi[j] += vj*isqrt_cvar
     if !isempty(cixj)
