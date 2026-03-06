@@ -53,3 +53,5 @@ function vecchia_estimate(cfg, init::Parameters, solver; kwargs...)
              res[(length(init.cov_params)+1):end])
 end
 
+function efish end
+
