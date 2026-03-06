@@ -83,7 +83,9 @@ module VecchiaForwardDiffExt
     ExpectedFisherBuf([0.0], grad, fish, primal_cc, kwts_jac, U_kwt_jac)
   end
 
-
+  # TODO (cg 2026/03/06 16:16): this is only implemented for mean-zero processes
+  # at the moment. Doing this for mean function parameters is probably even
+  # easier, but I just haven't done it.
   function _efish_term(cfg::Vecchia.SingletonVecchiaApproximation{Vecchia.ZeroMean,P,F}, 
                        cbuf, ebuf, params, j::Int) where{P,F}
     # compute the conditional variance and kriging weights for each point.
@@ -143,16 +145,25 @@ module VecchiaForwardDiffExt
     nothing
   end
 
-  # TODO (cg 2026/03/06 15:17): make an ExpectedFisherBuf and parallelize.
+  function _nll_grad_fish(cfg, chunks, cbufs, ebufs, params)
+    @sync for (j, cj) in enumerate(chunks)
+      Threads.@spawn foreach(k->_efish_term(cfg, cbufs[j], ebufs[j], params, k), cj)
+    end
+    nothing
+  end
+
   function _nll_grad_fish(cfg::Vecchia.SingletonVecchiaApproximation{Vecchia.ZeroMean,P,F}, 
                           params) where{P,F}
-    cbuf = Vecchia.cnllbuf(cfg, params)
-    ebuf = ExpectedFisherBuf(cfg, params)
-    for j in 1:length(cfg.condix) 
-      _efish_term(cfg, cbuf, ebuf, params, j)
-    end
-    ebuf.fish .*= size(cfg.data, 2)
-    (ebuf.nll[], ebuf.grad, ebuf.fish) 
+    n      = length(cfg.pts)
+    chunks = collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
+    cbufs  = [Vecchia.cnllbuf(cfg, params)   for _ in chunks]
+    ebufs  = [ExpectedFisherBuf(cfg, params) for _ in chunks]
+    blas_nthr = BLAS.get_num_threads()
+    BLAS.set_num_threads(1)
+    _nll_grad_fish(cfg, chunks, cbufs, ebufs, params)
+    BLAS.set_num_threads(blas_nthr)
+    _fish = sum(ebuf -> ebuf.fish,  ebufs).*size(cfg.data, 2)
+    (sum(ebuf -> ebuf.nll[], ebufs), sum(x->x.grad, ebufs), _fish) 
   end
 
   function Vecchia.nll_grad_fish(cfg::R, params::Vector{Float64}) where{R}

@@ -14,6 +14,7 @@ StaticArraysCore = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
 [weakdeps]
 BesselK = "432ab697-7a72-484f-bc4a-bc531f5c819b"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+GPMaxlik = "988d40dc-a58a-4803-bd2c-6d7438fe27fe"
 GeometricalPredicates = "fd0ad045-b25c-564e-8f9c-8ef5c5f21267"
 NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
@@ -38,6 +39,7 @@ StaticArrays = "1"
 StaticArraysCore = "1"
 julia = "1.10"
 sequentialknn_jll = "0.2"
+GPMaxlik = "0.14.3"
 
 [targets]
-test = ["Test", "BesselK", "StaticArrays", "StableRNGs"]
+test = ["Test", "BesselK", "StaticArrays", "StableRNGs", "GPMaxlik", "ForwardDiff"]

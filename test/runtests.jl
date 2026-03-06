@@ -2,6 +2,7 @@
 using Vecchia
 using Vecchia.LinearAlgebra
 using Test, StaticArrays, StableRNGs
+using BesselK, ForwardDiff, GPMaxlik
 
 function exact_nll(cfg::Vecchia.SingletonVecchiaApproximation, p)
   S   = [cfg.kernel(x, y, p) for x in cfg.pts, y in cfg.pts]
@@ -91,5 +92,20 @@ end
   v5  = Float64.([j+k for j in 1:length(pts), k in 1:5])
   @test maximum(abs, U*v1 - lU*v1) < 1e-12
   @test maximum(abs, U*v5 - lU*v5) < 1e-12
+end
+
+@testset "Manual expected Fisher" begin
+  fish_pts = rand(rng, SVector{2,Float64}, 50)
+  fish_dat = randn(rng, length(fish_pts), 3)
+  fish_cfg = VecchiaApproximation(fish_pts, matern, fish_dat; 
+                                  ordering=NoPermutation(),
+                                  conditioning=KPastIndicesConditioning(50))
+  ref_nll(p) = GPMaxlik.gnll_forwarddiff(p, fish_pts, fish_dat, matern; efish=true)
+  ref_efish  = ForwardDiff.hessian(ref_nll, [1.5, 0.5, 1.25])
+
+  (_nll, _grad, _fish) = Vecchia.nll_grad_fish(fish_cfg, [1.5, 0.5, 1.25])
+  @test _nll ≈ fish_cfg([1.5, 0.5, 1.25])
+  @test ForwardDiff.gradient(fish_cfg, [1.5, 0.5, 1.25]) ≈ _grad
+  @test ref_efish.*3 ≈ _fish
 end
 
