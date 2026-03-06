@@ -66,6 +66,7 @@ module VecchiaForwardDiffExt
   end
 
   struct ExpectedFisherBuf
+    nll::Vector{Float64}
     grad::Vector{Float64}
     fish::Matrix{Float64}
     primal_cvar_buf::Matrix{Float64}
@@ -79,20 +80,25 @@ module VecchiaForwardDiffExt
     kwts_jac   = zeros(maximum(length, cfg.condix), length(params))
     U_kwt_jac  = zeros(maximum(length, cfg.condix), length(params))
     primal_cc  = zeros(maximum(length, cfg.condix), maximum(length, cfg.condix))
-    ExpectedFisherBuf(grad, fish, primal_cc, kwts_jac, U_kwt_jac)
+    ExpectedFisherBuf([0.0], grad, fish, primal_cc, kwts_jac, U_kwt_jac)
   end
 
 
   function _efish_term(cfg::Vecchia.SingletonVecchiaApproximation{Vecchia.ZeroMean,P,F}, 
                        cbuf, ebuf, params, j::Int) where{P,F}
     # compute the conditional variance and kriging weights for each point.
-    cj   = cfg.condix[j]
-    ptj  = cfg.pts[j]
-    cvar = Vecchia.prepare_conditional!(cbuf, cfg, j, params)
-    cres = view(cbuf.buf_cres, 1:length(cj))
-    kwts = view(cbuf.buf_kwts, 1:length(cj))
-    cμ   = dot(view(cfg.data, cj, 1), kwts)
-    nllj = (log(cvar) + ((cfg.data[j,1] - cμ)^2)/cvar)/2
+    ndata = size(cfg.data, 2)
+    cj    = cfg.condix[j]
+    ptj   = cfg.pts[j]
+    cvar  = Vecchia.prepare_conditional!(cbuf, cfg, j, params)
+    cres  = view(cbuf.buf_cres, 1:length(cj))
+    kwts  = view(cbuf.buf_kwts, 1:length(cj))
+    nllj  = sum(1:ndata) do k
+      cμ  = dot(view(cfg.data, cj, k), kwts)
+      (log(cvar) + ((cfg.data[j,k] - cμ)^2)/cvar)/2
+    end
+    # update the primal value of the nll real quick.
+    ebuf.nll[1] += ForwardDiff.value(nllj)
     # update the gradient and fisher information accordingly.
     grad_parts = ForwardDiff.partials(nllj)
     cvar_parts = ForwardDiff.partials(cvar)
@@ -138,25 +144,25 @@ module VecchiaForwardDiffExt
   end
 
   # TODO (cg 2026/03/06 15:17): make an ExpectedFisherBuf and parallelize.
-  function _efish(cfg::Vecchia.SingletonVecchiaApproximation{Vecchia.ZeroMean,P,F}, 
-                  params) where{P,F}
-    size(cfg.data, 2) == 1 || throw(error("Only for m=1 right now, sorry."))
+  function _nll_grad_fish(cfg::Vecchia.SingletonVecchiaApproximation{Vecchia.ZeroMean,P,F}, 
+                          params) where{P,F}
     cbuf = Vecchia.cnllbuf(cfg, params)
     ebuf = ExpectedFisherBuf(cfg, params)
     for j in 1:length(cfg.condix) 
       _efish_term(cfg, cbuf, ebuf, params, j)
     end
-    (ebuf.grad, ebuf.fish) 
+    ebuf.fish .*= size(cfg.data, 2)
+    (ebuf.nll[], ebuf.grad, ebuf.fish) 
   end
 
-  function Vecchia.efish(cfg::R, params::Vector{Float64}) where{R}
+  function Vecchia.nll_grad_fish(cfg::R, params::Vector{Float64}) where{R}
     tag = ForwardDiff.Tag(R, Float64)
     N   = length(params)
     duals = map(1:length(params)) do j
       pj = ForwardDiff.Partials(ntuple(k->Float64(k==j), N))
       ForwardDiff.Dual{typeof(tag)}(params[j], pj)
     end
-    _efish(cfg, duals)
+    _nll_grad_fish(cfg, duals)
   end
 end
 
