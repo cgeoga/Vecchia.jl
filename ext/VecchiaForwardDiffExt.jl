@@ -11,6 +11,7 @@ module VecchiaForwardDiffExt
 
   struct CachingADWrapper{F,G,H,R}
     fn::F
+    efish::Bool
     grad_config::G
     hess_config::H
     hess_result::R
@@ -19,7 +20,23 @@ module VecchiaForwardDiffExt
     mean_ixs::UnitRange{Int64}
   end
 
-  function Vecchia.adcachewrapper(fn::F, cov_ixs, mean_ixs) where{F}
+  meantype(cfg::Vecchia.SingletonVecchiaApproximation{M,P,F}) where{M,P,F} = M
+
+  function Vecchia.adcachewrapper(fn::F, expected_fisher, 
+                                  cov_ixs, mean_ixs) where{F}
+    if expected_fisher
+      if !(fn isa VecchiaApproximation) 
+        error("Expected fisher matrices are GP-specific approximations.")
+      end
+      # a few temporary errors.
+      if fn isa Vecchia.ChunkedVecchiaApproximation
+        error("`Vecchia.nll_grad_fish` is not currently implemented for chunked approximations, sorry.")
+      end
+      if fn isa Vecchia.SingletonVecchiaApproximation && meantype(fn) != Vecchia.ZeroMean
+        error("`Vecchia.nll_grad_fish` is only presently implemented for mean-zero models, sorry.")
+      end
+      @info "Expected Fisher information matrices will be used in place of exact Hessians" maxlog=1
+    end
     npar  = max(maximum(cov_ixs), maximum(mean_ixs))
     chunk = ForwardDiff.Chunk(zeros(npar))
     obj   = t->fn(t; cov_param_ixs=cov_ixs, mean_param_ixs=mean_ixs)
@@ -27,7 +44,8 @@ module VecchiaForwardDiffExt
     hres  = DiffResults.HessianResult(zeros(npar))
     hcfg  = ForwardDiff.HessianConfig(obj, hres, zeros(npar), chunk)
     cache = Dict{Vector{Float64}, EvaluationResult}()
-    CachingADWrapper(obj, gcfg, hcfg, hres, cache, cov_ixs, mean_ixs)
+    CachingADWrapper(obj, expected_fisher, gcfg, hcfg, 
+                     hres, cache, cov_ixs, mean_ixs)
   end
 
   function Vecchia._primal(cw::CachingADWrapper{F,G,H,R}, x) where{F,G,H,R}
@@ -56,13 +74,20 @@ module VecchiaForwardDiffExt
       x_res = cw.cache[x]
       isnothing(x_res.hessian) || return x_res.hessian
     end
-    res = cw.hess_result
-    ForwardDiff.hessian!(res, cw.fn, x, cw.hess_config)
-    store = EvaluationResult(DiffResults.value(res), 
-                             DiffResults.gradient(res), 
-                             Symmetric(DiffResults.hessian(res)))
-    cw.cache[x] = store
-    DiffResults.hessian(res)
+    if cw.efish
+      (_nll, _grad, _fish) = Vecchia.nll_grad_fish(cw.fn.fn, x)
+      store = EvaluationResult(_nll, _grad, Symmetric(_fish))
+      cw.cache[x] = store
+      return _fish
+    else
+      res = cw.hess_result
+      ForwardDiff.hessian!(res, cw.fn, x, cw.hess_config)
+      store = EvaluationResult(DiffResults.value(res), 
+                               DiffResults.gradient(res), 
+                               Symmetric(DiffResults.hessian(res)))
+      cw.cache[x] = store
+      return DiffResults.hessian(res)
+    end
   end
 
   struct ExpectedFisherBuf
@@ -174,6 +199,13 @@ module VecchiaForwardDiffExt
       ForwardDiff.Dual{typeof(tag)}(params[j], pj)
     end
     _nll_grad_fish(cfg, duals)
+  end
+
+  function Vecchia.nll_grad_fish(cfg::R, params::Vecchia.Parameters) where{R}
+    if length(params.mean_params) > 0
+      error("`Vecchia.nll_grad_fish` is only presently implemented for mean-zero models, sorry.")
+    end
+    Vecchia.nll_grad_fish(cfg, params.cov_params)
   end
 end
 
