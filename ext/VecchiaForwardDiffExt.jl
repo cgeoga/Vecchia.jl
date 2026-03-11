@@ -2,23 +2,7 @@
 module VecchiaForwardDiffExt
 
   using LinearAlgebra, Vecchia, ForwardDiff
-
-  struct EvaluationResult
-    primal::Float64
-    gradient::Union{Nothing, Vector{Float64}}
-    hessian::Union{Nothing, Symmetric{Float64, Matrix{Float64}}}
-  end 
-
-  struct CachingADWrapper{F,G,H,R}
-    fn::F
-    efish::Bool
-    grad_config::G
-    hess_config::H
-    hess_result::R
-    cache::Dict{Vector{Float64}, EvaluationResult}
-    cov_ixs::UnitRange{Int64}
-    mean_ixs::UnitRange{Int64}
-  end
+  import Vecchia: EvaluationResult, CachingForwardADWrapper, nll_grad_fish, _nll_grad_fish
 
   meantype(cfg::Vecchia.SingletonVecchiaApproximation{M,P,F}) where{M,P,F} = M
 
@@ -39,23 +23,27 @@ module VecchiaForwardDiffExt
     end
     npar  = max(maximum(cov_ixs), maximum(mean_ixs))
     chunk = ForwardDiff.Chunk(zeros(npar))
-    obj   = t->fn(t; cov_param_ixs=cov_ixs, mean_param_ixs=mean_ixs)
+    obj   = if fn isa VecchiaApproximation
+      t->fn(t; cov_param_ixs=cov_ixs, mean_param_ixs=mean_ixs)
+    else
+      fn
+    end
     gcfg  = ForwardDiff.GradientConfig(obj, zeros(npar), chunk)
     hres  = DiffResults.HessianResult(zeros(npar))
     hcfg  = ForwardDiff.HessianConfig(obj, hres, zeros(npar), chunk)
     cache = Dict{Vector{Float64}, EvaluationResult}()
-    CachingADWrapper(obj, expected_fisher, gcfg, hcfg, 
+    CachingForwardADWrapper(obj, expected_fisher, gcfg, hcfg, 
                      hres, cache, cov_ixs, mean_ixs)
   end
 
-  function Vecchia._primal(cw::CachingADWrapper{F,G,H,R}, x) where{F,G,H,R}
+  function Vecchia._primal(cw::CachingForwardADWrapper{F,G,H,R}, x) where{F,G,H,R}
     haskey(cw.cache, x) && return cw.cache[x].primal
     primal = cw.fn(x)
     cw.cache[x] = EvaluationResult(primal, nothing, nothing)
     primal
   end
 
-  function Vecchia._gradient(cw::CachingADWrapper{F,G,H,R}, x) where{F,G,H,R}
+  function Vecchia._gradient(cw::CachingForwardADWrapper{F,G,H,R}, x) where{F,G,H,R}
     if haskey(cw.cache, x)
       x_res = cw.cache[x]
       isnothing(x_res.gradient) || return x_res.gradient
@@ -69,7 +57,7 @@ module VecchiaForwardDiffExt
     DiffResults.gradient(res)
   end
 
-  function Vecchia._hessian(cw::CachingADWrapper{F,G,H,R}, x) where{F,G,H,R}
+  function Vecchia._hessian(cw::CachingForwardADWrapper{F,G,H,R}, x) where{F,G,H,R}
     if haskey(cw.cache, x)
       x_res = cw.cache[x]
       isnothing(x_res.hessian) || return x_res.hessian
@@ -191,7 +179,7 @@ module VecchiaForwardDiffExt
     (sum(ebuf -> ebuf.nll[], ebufs), sum(x->x.grad, ebufs), _fish) 
   end
 
-  function Vecchia.nll_grad_fish(cfg::R, params::Vector{Float64}) where{R}
+  function nll_grad_fish(cfg::R, params::Vector{Float64}) where{R}
     tag = ForwardDiff.Tag(R, Float64)
     N   = length(params)
     duals = map(1:length(params)) do j
@@ -201,7 +189,7 @@ module VecchiaForwardDiffExt
     _nll_grad_fish(cfg, duals)
   end
 
-  function Vecchia.nll_grad_fish(cfg::R, params::Vecchia.Parameters) where{R}
+  function nll_grad_fish(cfg::R, params::Vecchia.Parameters) where{R}
     if length(params.mean_params) > 0
       error("`Vecchia.nll_grad_fish` is only presently implemented for mean-zero models, sorry.")
     end

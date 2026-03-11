@@ -53,5 +53,23 @@ function vecchia_estimate(cfg, init::Parameters, solver; kwargs...)
              res[(length(init.cov_params)+1):end])
 end
 
-function nll_grad_fish end
+function  nll_grad_fish end
+function _nll_grad_fish end
+
+struct EvaluationResult
+  primal::Float64
+  gradient::Union{Nothing, Vector{Float64}}
+  hessian::Union{Nothing, Symmetric{Float64, Matrix{Float64}}}
+end 
+
+struct CachingForwardADWrapper{F,G,H,R}
+  fn::F
+  efish::Bool
+  grad_config::G
+  hess_config::H
+  hess_result::R
+  cache::Dict{Vector{Float64}, EvaluationResult}
+  cov_ixs::UnitRange{Int64}
+  mean_ixs::UnitRange{Int64}
+end
 
