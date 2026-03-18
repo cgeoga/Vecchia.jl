@@ -10,7 +10,7 @@ function Base.getindex(tiles::CovarianceTiles{T}, j::Int64, k::Int64) where{T}
   throw(error("No tile available for pair ($j, $k)."))
 end
 
-function alloc_tiles(pts, condix)
+function tile_pairs(condix)
   req_pairs = Set{Tuple{Int64, Int64}}()
   sizehint!(req_pairs, 2*length(condix)*maximum(length, condix))
   for j in eachindex(condix)
@@ -24,6 +24,10 @@ function alloc_tiles(pts, condix)
     end
   end
   req_pairs = collect(req_pairs)
+end
+
+function alloc_tiles(pts, condix)
+  req_pairs = tile_pairs(condix)
   bufs = map(req_pairs) do jk
     (ptj, ptk) = (pts[jk[1]], pts[jk[2]])
     (lj, lk)   = (length(ptj), length(ptk))
