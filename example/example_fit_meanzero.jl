@@ -1,37 +1,39 @@
 
-using NLPModels, ForwardDiff, UnoSolver, sequentialknn_jll
+using NLPModels, ForwardDiff, UnoSolver
+using sequentialknn_jll # an optional extension for blazing fast conditioning set design
 
+# this script just simulates some data (pts_train, data_train, pts_pred,
+# data_pred). In a real application, you would naturally bring your own
+# locations and data.
 include("example_setup.jl")
 
-# specify the approximation for the data.
-const approx = VecchiaApproximation(pts_train, matern, data_train)
+# specify the approximation for the data. This uses the Mat\'ern covariance
+# function that looks like 
+#
+# matern(location_1, location_2, params)
+#
+# provided by BesselK.jl.
+approx = VecchiaApproximation(pts_train, matern, data_train)
 
-# compute the approximate mle.
+# compute the approximate mle that identifies the "best" kernel parameters.
 solver = NLPModelsSolver(uno; preset="filtersqp", TR_radius=0.1)
 mle    = vecchia_estimate(approx, ones(3), solver;
-                          # New in Version 0.12.8+: setting expected_fisher=true
-                          # means that expected Fisher matrices will be used in
-                          # place of true Hessians (a la Fisher scoring). These
-                          # are faster to compute and only require first
-                          # derivatives of the kernel. But they are not the
-                          # exact Hessian, and so you may need to be careful in
-                          # initialization (not TR_radius=0.01 in the solver
-                          # options above!).
-                          expected_fisher=true,
+                          expected_fisher=true, # a faster Hessian proxy
                           box_lower=[1e-8, 1e-8, 0.25], 
                           box_upper=[10.0, 10.0, 5.0])
 
 # now predict at the un-observed locations.
 preds  = predict(approx, pts_pred, mle)
 cmean  = conditional_mean(preds)
+cvars  = conditional_variances(preds)
 
 # summarize the first few results:
 using Printf
-@printf "\n\n** A few predictions **\n"
-@printf "-----------------------\n"
-@printf "True value   Prediction\n"
-@printf "-----------------------\n"
+@printf "\n\n**** A few predictions ****\n"
+@printf "---------------------------\n"
+@printf "True value      Prediction\n"
+@printf "---------------------------\n"
 for j in 1:5
-  @printf "  % 01.3f      % 01.3f\n" data_pred[j] cmean[j]
+  @printf "  % 01.3f      % 01.3f ± %1.2f \n" data_pred[j] cmean[j] sqrt(cvars[j])*1.96
 end
 

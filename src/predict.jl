@@ -115,3 +115,15 @@ function conditional_variances(vp::VecchiaPrediction)
   takahashi_diagonal(U)[vp.invperm]
 end
 
+"""
+`conditional_simulate(vp::VecchiaPrediction; z=randn(size(vp.cmean)))`
+
+Returns conditional simulation(s) from the conditional distribution specified by
+`vp`, permuted back to the order in which data points were provided.
+"""
+function conditional_simulate(vp::VecchiaPrediction;
+                              z=randn(size(vp.cmean)))
+  sim = vp.cmean .+ vp.prediction_rchol'\z
+  sim[vp.invperm,:]
+end
+
