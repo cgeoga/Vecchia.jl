@@ -4,7 +4,8 @@
 This package offers a flexible and optimized framework for fitting parametric
 Gaussian process models to large datasets using the linear-cost [*Vecchia
 approximation*](https://en.wikipedia.org/wiki/Vecchia_approximation). This
-library offers several features that set it apart from others in the space:
+library offers several **unique** features that set it apart from others in the
+space:
 - Because it is written in Julia, you can provide any covariance function you
   want (as opposed to being restricted to a list of pre-implemented models).
 - If autodiff works on your kernel function, it will work for the approximation
@@ -19,7 +20,7 @@ library offers several features that set it apart from others in the space:
 - Because of how great the Julia optimization ecosystem is, you can hook into
   *much* more powerful optimizers than is possible in, for example, R.
 
-**See the example files for commented and run-able demonstrations.** 
+**See the example files for commented demonstrations.** 
 
 ## Simple usage demonstration
 
@@ -41,13 +42,24 @@ appx = VecchiaApproximation(pts, kernel, data)
 # demonstrated in the example files.
 using ForwardDiff, NLPModels, UnoSolver
 
-# Specify a solver and hand everything to vecchia_estimate.
+# Specify a solver and hand everything to vecchia_estimate. Optionally, 
+# you can substitute the expected Fisher information matrix in place of
+# the true Hessian, which will be faster since it only requires first
+# partial derivatives of the covariance function with respect to params.
 solver = NLPModelsSolver(uno; preset="filtersqp")
-mle    = vecchia_estimate(appx, some_init, solver)
+mle    = vecchia_estimate(appx, some_init, solver;
+                          expected_fisher=true) # only for MeanZero() (for now!)
 
-# perhaps now you wanted to predict with your fitted model?
+# Perhaps now you wanted to predict with your fitted model?
 # (see the docstrings for options, but hopefully the defaults will serve you well!)
 preds  = predict(appx, prediction_pts, mle)
+
+# With those predictions, you can get the conditional mean and conditional
+# variances rapidly, and for small numbers of prediction points you can get
+# the full dense conditional covariance matrix.
+cond_mean  = conditional_mean(preds)
+cond_vars  = conditional_variances(preds)
+cond_covar = full_conditional_covariance(preds) # beware of runtime!
 ```
 It's that easy! Enjoy your linear-cost (approximate) MLEs, predictions,
 conditional simulations, preconditioners, and more.

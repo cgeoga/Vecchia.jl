@@ -17,6 +17,15 @@ function singleton_to_chunk(c::Vecchia.SingletonVecchiaApproximation)
                                       pts_ch, c.condix, c.perm)
 end
 
+function dense_posterior(kernel, params, pts_have, pts_pred, data, meanfun)
+  Σ_have  = [kernel(x, y, params) for x in pts_have, y in pts_have]
+  Σ_cross = [kernel(x, y, params) for x in pts_pred, y in pts_have]
+  Σ_pred  = [kernel(x, y, params) for x in pts_pred, y in pts_pred]
+  cmean   = Σ_cross*(Σ_have\(data - meanfun.(pts_have)))
+  cvar    = Σ_pred - Σ_cross*(Σ_have\Σ_cross')
+  (cmean, cvar)
+end
+
 kernel(x, y, p) = p[1]*exp(-norm(x-y)/p[2])
 meanfun(x, p)   = exp(x[1]*p[3])
 
@@ -107,5 +116,29 @@ end
   @test _nll ≈ fish_cfg([1.5, 0.5, 1.25])
   @test ForwardDiff.gradient(fish_cfg, [1.5, 0.5, 1.25]) ≈ _grad
   @test ref_efish.*3 ≈ _fish
+end
+
+@testset "Prediction" begin
+  _pts = rand(StableRNG(1234), SVector{2,Float64}, 110)
+  prms = [5.0, 0.5, 2.25]
+  sim  = randn(length(_pts))
+
+  (pts_train,  data_train)  = (_pts[1:100], sim[1:100])
+  (pts_pred, data_pred)     = (_pts[101:end], sim[101:end])
+
+
+  (cmean, cvar) = dense_posterior(matern, prms, pts_train, 
+                                  pts_pred, data_train, x->0.0)
+
+
+  dense_appx = VecchiaApproximation(pts_train, matern, data_train;
+                                    conditioning=KNNConditioning(1000))
+
+  predictions = predict(dense_appx, pts_pred, prms; conditioning=KNNConditioning(1000))
+
+
+  @test cmean ≈ conditional_mean(predictions)
+  @test cvar  ≈ full_conditional_covariance(predictions)
+  @test diag(cvar) ≈ conditional_variances(predictions)
 end
 

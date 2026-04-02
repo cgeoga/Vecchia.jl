@@ -26,7 +26,8 @@ mle    = vecchia_estimate(approx, init, solver)
 
 # now predict at the un-observed locations. Even though mle is a Parameters
 # object, everything will just work as expected.
-pred   = predict(approx, pts_pred, mle)
+preds  = predict(approx, pts_pred, mle)
+cmean  = conditional_mean(preds)
 
 # summarize the first few results:
 using Printf
@@ -35,6 +36,6 @@ using Printf
 @printf "True value   Prediction\n"
 @printf "-----------------------\n"
 for j in 1:5
-  @printf "  % 01.3f      % 01.3f\n" data_pred[j] pred[j]
+  @printf "  % 01.3f      % 01.3f\n" data_pred[j] cmean[j]
 end
 

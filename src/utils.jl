@@ -205,3 +205,68 @@ function fastknn_routine_available(pts::Vector{SVector{D,Float64}},
   true
 end
 
+function chordal_completion(U_tri::UpperTriangular)
+  U          = U_tri.data
+  (n, I, J)  = (size(U_tri, 1), Int64[], Int64[])
+  max_c      = maximum(diff(U.colptr))-1
+  size_bound = n + n*max_c + n*div(max_c*(max_c-1), 2)
+  sizehint!(I, size_bound)
+  sizehint!(J, size_bound)
+  # Generate the chordal completion that will indicate what values of S need to
+  # be computed by selinv-type logic, allowing duplicates here that will be
+  # handled by the sparse constructor.
+  for c in 1:n
+    push!(I, c)
+    push!(J, c)
+    ptr_start = U.colptr[c]
+    ptr_end = U.colptr[c+1] - 1
+    for ptr_k in ptr_start:ptr_end
+      k = U.rowval[ptr_k]
+      k >= c && continue
+      push!(I, k)
+      push!(J, c)
+      for ptr_l in ptr_start:(ptr_k-1)
+        rl = U.rowval[ptr_l]
+        push!(I, rl)
+        push!(J, k)
+      end
+    end
+  end
+  # Allocate the Sparse Matrix S (duplicates are safely merged by sparse)
+  S = sparse(I, J, ones(Float64, length(I)), n, n)
+  fill!(S.nzval, 0.0)
+  S
+end
+
+function takahashi_diagonal(U_tri::UpperTriangular)
+  (n, U) = (size(U_tri,1), U_tri.data)
+  S      = chordal_completion(U_tri)
+  for c in 1:n
+    U_cc = U[c, c]
+    (S_start, S_end) = (S.colptr[c], S.colptr[c+1] - 1)
+    (U_start, U_end) = (U.colptr[c], U.colptr[c+1] - 1)
+    # Calculate off-diagonals
+    for S_ptr in S_start:S_end
+      r = S.rowval[S_ptr]
+      r == c && continue
+      sum_val = 0.0
+      for U_ptr in U_start:U_end
+        k = U.rowval[U_ptr]
+        k == c && continue
+        row_idx = min(r, k)
+        col_idx = max(r, k)
+        sum_val += U[k, c] * S[row_idx, col_idx]
+      end
+      S.nzval[S_ptr] = -sum_val / U_cc
+    end
+    # Calculate diagonal
+    sum_diag = 0.0
+    for U_ptr in U_start:U_end
+      k = U.rowval[U_ptr]
+      k == c && continue
+      sum_diag += U[k, c] * S[k, c]
+    end
+    S.nzval[S_end] = (1.0 / U_cc) * ((1.0 / U_cc) - sum_diag)
+  end
+  diag(S)
+end

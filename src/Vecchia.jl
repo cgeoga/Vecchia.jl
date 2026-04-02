@@ -27,7 +27,7 @@ module Vecchia
   export NLPModelsSolver, vecchia_estimate, vecchia_estimate_nugget
 
   include("predict.jl")
-  export predict
+  export predict, conditional_mean, full_conditional_covariance, conditional_variances
 
 end 
 
