@@ -53,17 +53,15 @@ end
 function nll(V, params::AbstractVector{T};
              cov_param_ixs::UnitRange{Int64}=1:length(params),
              mean_param_ixs::UnitRange{Int64}=1:length(params)) where{T}
-  n           = length(V.pts)
-  chunks      = collect(Iterators.partition(1:n, cld(n, nthreads())))
-  works       = [cnllbuf(V, params) for _ in chunks]
-  blas_nthr   = BLAS.get_num_threads()
+  works     = [cnllbuf(V, params) for _ in V.worker_indices]
+  blas_nthr = BLAS.get_num_threads()
   # by default, the cov and mean params _do_ overlap and are just the whole
   # parameter vector, so that people who want to handle things on their own can
   # do that.
   cov_params  = params[cov_param_ixs]
   mean_params = params[mean_param_ixs]
   BLAS.set_num_threads(1)
-  out = _nll(V, cov_params, mean_params, works, chunks)
+  out = _nll(V, cov_params, mean_params, works, V.worker_indices)
   BLAS.set_num_threads(blas_nthr)
   out
 end

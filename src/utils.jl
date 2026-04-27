@@ -20,13 +20,39 @@ end
 # number of elements in the lower triangle of an n x n matrix.
 ltrisz(n) = div(n*(n+1), 2)
 
+# A simple algorithm for attempting to evenly distribute the work of likelihood
+# evaluation to each core. This is an experimental optimization.
+function even_work_chunks_greedy(kv::Vector{Int64}, nworkers)
+  # Calculate work and get the indices sorted from largest to smallest work
+  work = [k^3 for k in kv]
+  sorted_idx = sortperm(work, rev=true)
+  # Initialize trackers for each worker
+  worker_loads = zeros(Int64, nworkers)
+  assignments  = [Vector{Int64}() for _ in 1:nworkers]
+  # Greedily assign the largest remaining job to the least loaded worker
+  for idx in sorted_idx
+    min_worker = argmin(worker_loads)
+    push!(assignments[min_worker], idx)
+    worker_loads[min_worker] += work[idx]
+  end
+  # Just for readability---will remove this after kicking the tires a bit.
+  foreach(asj -> sort!(asj), assignments)
+  assignments
+end
+
+function uniform_index_chunks(n, nworkers)
+  collect(Iterators.partition(1:n, cld(n, Threads.nthreads())))
+end
+
 function updatebuf!(buf::AbstractMatrix, pts::AbstractVector{P},
                     kfun::F, params) where{P,F}
+  @inbounds begin
   for k in eachindex(pts)
     for j in 1:k
       buf[j,k] = kfun(pts[j], pts[k], params)
       buf[k,j] = buf[j,k]
     end
+  end
   end
   nothing
 end
@@ -71,8 +97,10 @@ end
 
 function updatebuf!(buf::AbstractVector, ptsv::AbstractVector{P}, pt::P, 
                     kfun::F, params) where{P,F}
-  @inbounds for j in eachindex(buf, ptsv)
+  @inbounds begin
+  for j in eachindex(buf, ptsv)
     buf[j] = kfun(ptsv[j], pt, params)
+  end
   end
   nothing
 end
@@ -167,7 +195,7 @@ end
 
 function generic_dense_nll(S, data)
   Sf = cholesky(Hermitian(S))
-  (logdet(Sf) + sum(abs2, Sf.U'\data))/2
+  (logdet(Sf)*size(data, 2) + sum(abs2, Sf.U'\data))/2
 end
 
 generic_nll(R::Diagonal, data)  = 0.5*(logdet(R) + dot(data, R\data))

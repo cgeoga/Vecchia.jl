@@ -64,7 +64,7 @@ end
 
 function predict(vp::VecchiaPredictionDesign{M,P,F}, cov_params, mean_params) where{M,P,F}
   jva = SingletonVecchiaApproximation(vp.meanfun, vp.kernel, [NaN;;], 
-                                      vp.joint_pts, vp.joint_condix, Int64[])
+                                      vp.joint_pts, vp.joint_condix, Int64[], [Int64[]])
   ixs     = (vp.n+1):length(vp.joint_pts)
   U       = rchol(jva, cov_params).U.data
   U_cross = U[(1:vp.n),ixs]

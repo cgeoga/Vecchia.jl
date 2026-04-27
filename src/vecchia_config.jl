@@ -15,6 +15,7 @@ struct ChunkedVecchiaApproximation{M,D,F} <: VecchiaApproximation{M,D,F}
   pts::Vector{Vector{SVector{D, Float64}}}
   condix::Vector{Vector{Int64}} 
   perm::Vector{Int64}
+  worker_indices::Vector{Vector{Int64}}
 end
 
 # TODO (cg 2025/12/14 22:43): write optimized methods for this object. In
@@ -38,6 +39,7 @@ struct SingletonVecchiaApproximation{M,P,F} <: VecchiaApproximation{M,P,F}
   pts::Vector{P}
   condix::Vector{Vector{Int64}} 
   perm::Vector{Int64}
+  worker_indices::Vector{Vector{Int64}}
 end
 
 function Base.display(V::ChunkedVecchiaApproximation)

@@ -125,7 +125,7 @@ function chunk_format_points_and_data(pts, data, ::SingletonPredictionSets)
   (pts_str, data_str)
 end
 
-function chunked_approximation(pts,kernel, data=nothing;
+function chunked_approximation(pts, kernel, data=nothing;
                                meanfun=ZeroMean(),
                                ordering=default_ordering(pts),
                                predictionsets=default_predictionsets(),
@@ -134,7 +134,9 @@ function chunked_approximation(pts,kernel, data=nothing;
   condix = conditioningsets(_pts_perm, conditioning)
   (pts_ch, data_ch) = chunk_format_points_and_data(_pts_perm, _data_perm, 
                                                    predictionsets)
-  ChunkedVecchiaApproximation(meanfun, kernel, data_ch, pts_ch, condix, perm)
+  worker_ixs = uniform_index_chunks(length(pts), Threads.nthreads())
+  ChunkedVecchiaApproximation(meanfun, kernel, data_ch, pts_ch, 
+                              condix, perm, worker_ixs)
 end
 
 function singleton_approximation(pts, kernel, data=nothing;
@@ -142,8 +144,10 @@ function singleton_approximation(pts, kernel, data=nothing;
                                  ordering=ordering,
                                  conditioning=conditioning)
   (perm, pts_perm, data_perm) = permute_points_and_data(pts, data, ordering)
-  data_perm = isnothing(data_perm) ? [NaN;;] : hcat(data_perm)
-  condix    = conditioningsets(pts_perm, conditioning)
-  SingletonVecchiaApproximation(meanfun, kernel, data_perm, pts_perm, condix, perm)
+  data_perm  = isnothing(data_perm) ? [NaN;;] : hcat(data_perm)
+  condix     = conditioningsets(pts_perm, conditioning)
+  worker_ixs = even_work_chunks_greedy(length.(condix), Threads.nthreads())
+  SingletonVecchiaApproximation(meanfun, kernel, data_perm, 
+                                pts_perm, condix, perm, worker_ixs)
 end
 

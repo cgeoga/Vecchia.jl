@@ -14,7 +14,7 @@ function singleton_to_chunk(c::Vecchia.SingletonVecchiaApproximation)
   sp = Vecchia.SingletonPredictionSets()
   (pts_ch, data_ch) = Vecchia.chunk_format_points_and_data(c.pts, c.data, sp)
   Vecchia.ChunkedVecchiaApproximation(c.meanfun, c.kernel, data_ch, 
-                                      pts_ch, c.condix, c.perm)
+                                      pts_ch, c.condix, c.perm, c.worker_indices)
 end
 
 function dense_posterior(kernel, params, pts_have, pts_pred, data, meanfun)
