@@ -80,7 +80,7 @@ module VecchiaNLPModelsExt
                                  hvals::AbstractVector{Float64}; 
                                  obj_weight=1) where{C,T,S}
     _h = try
-      Vecchia._hessian(vnlp.cfg, x)
+      Matrix(Vecchia._hessian(vnlp.cfg, x))
     catch
       fill(NaN, (length(x), length(x)))
     end
