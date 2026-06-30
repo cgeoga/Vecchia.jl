@@ -260,7 +260,6 @@ function chordal_completion(U_tri::UpperTriangular)
       end
     end
   end
-  # Allocate the Sparse Matrix S (duplicates are safely merged by sparse)
   S = sparse(I, J, ones(Float64, length(I)), n, n)
   fill!(S.nzval, 0.0)
   S

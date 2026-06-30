@@ -163,6 +163,41 @@ function LinearAlgebra.mul!(buf::AbstractVector,
   copyto!(buf, rc.buf)
 end
 
+function LinearAlgebra.mul!(buf::AbstractMatrix, 
+                            rc::RCholeskyPreconditioner, 
+                            v::AbstractMatrix)
+  for j in 1:size(buf, 2)
+    bufj = view(buf, :, j)
+    vj   = view(v,   :, j)
+    mul!(bufj, rc, vj)
+  end
+  buf
+end
+
+Base.:*(rc::RCholeskyPreconditioner, v::AbstractVector) = mul!(similar(v), rc, v)
+Base.:*(rc::RCholeskyPreconditioner, v::AbstractMatrix) = mul!(similar(v), rc, v)
+
+function LinearAlgebra.ldiv!(buf::AbstractVector, 
+                             rc::RCholeskyPreconditioner, 
+                             v::AbstractVector)
+  @info "For broad compatility, both ldiv! and mul! with an RCholeskyPreconditioner apply U U^T ≈ Σ^{-1}." maxlog=1
+  mul!(buf, rc, v)
+end
+
+function LinearAlgebra.ldiv!(buf::AbstractMatrix, 
+                             rc::RCholeskyPreconditioner, 
+                             v::AbstractMatrix)
+  for j in 1:size(buf, 2)
+    bufj = view(buf, :, j)
+    vj   = view(v,   :, j)
+    ldiv!(bufj, rc, vj)
+  end
+  buf
+end
+
+Base.:\(rc::RCholeskyPreconditioner, v::AbstractVector) = ldiv!(similar(v), rc, v)
+Base.:\(rc::RCholeskyPreconditioner, v::AbstractMatrix) = ldiv!(similar(v), rc, v)
+
 # For now, hard-coded for singleton.
 struct LazyRCholesky{C,T}
   cfg::C # the actual VecchiaApproximation object
