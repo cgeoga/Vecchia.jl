@@ -1,13 +1,9 @@
 
-# TODO (cg 2025/12/15 14:17): 
-#
-# - generalize the extra methods for AbstractMatrix as well. Just need to do a
-# little for loop for the permutations.
-struct RCholesky <: AbstractMatrix{Float64}
-  U::UpperTriangular{Float64, SparseMatrixCSC{Float64, Int64}}
+struct RCholesky{T} <: AbstractMatrix{T}
+  U::UpperTriangular{T, SparseMatrixCSC{T, Int64}}
   p::Vector{Int64}
   ip::Vector{Int64}
-  buf::Vector{Float64}
+  buf::Vector{T}
 end
 
 function Base.display(rc::RCholesky)
@@ -16,7 +12,7 @@ function Base.display(rc::RCholesky)
   println("  - nzfraction:   $(nnz(rc.U)/prod(size(rc)))")
 end
 
-function Base.display(arc::Adjoint{Float64, RCholesky})
+function Base.display(arc::Adjoint{T, <:RCholesky{T}}) where {T}
   rc = arc.parent
   println("Adjoint RCholesky factor with: ")
   println("  - size:         $(size(rc))")
@@ -25,9 +21,9 @@ end
 
 Base.size(rc::RCholesky)    = size(rc.U)
 Base.size(rc::RCholesky, j) = size(rc.U, j)
-Base.eltype(rc::RCholesky)  = Float64
+Base.eltype(rc::RCholesky{T}) where {T} = T
 
-Base.adjoint(rc::RCholesky) = Adjoint{Float64, RCholesky}(rc)
+Base.adjoint(rc::RCholesky{T}) where {T} = Adjoint{T, RCholesky{T}}(rc)
 
 LinearAlgebra.issymmetric(rc::RCholesky) = false
 LinearAlgebra.ishermitian(rc::RCholesky) = false
@@ -43,23 +39,19 @@ function LinearAlgebra.mul!(buf::AbstractMatrix, rc::RCholesky, v::AbstractMatri
   buf
 end
 
-# I have to define this method specifically, because without type annotations on
-# v it is ambiguous. That's pretty annoying.
 function Base.:*(rc::RCholesky, v::AbstractVector)
   buf = similar(v)
   mul!(buf, rc, v)
 end
 
-# I have to define this method specifically, because without type annotations on
-# v it is ambiguous. That's pretty annoying.
 function Base.:*(rc::RCholesky, v::AbstractMatrix)
   buf = similar(v)
   mul!(buf, rc, v)
 end
 
 function LinearAlgebra.mul!(buf::AbstractVector, 
-                            arc::Adjoint{Float64, RCholesky}, 
-                            v::AbstractVector)
+                            arc::Adjoint{T, RCholesky{T}}, 
+                            v::AbstractVector) where {T}
   rc = arc.parent
   copyto!(rc.buf, v)
   permute!(rc.buf, rc.p)
@@ -67,25 +59,21 @@ function LinearAlgebra.mul!(buf::AbstractVector,
 end
 
 function LinearAlgebra.mul!(buf::AbstractMatrix, 
-                            arc::Adjoint{Float64, RCholesky}, 
-                            v::AbstractMatrix)
+                            arc::Adjoint{T, RCholesky{T}}, 
+                            v::AbstractMatrix) where {T}
   rc = arc.parent
   copyto!(rc.buf, v)
   foreach(cj->permute!(cj, rc.p), eachcol(rc.buf))
   mul!(buf, rc.U', rc.buf)
 end
 
-# I have to define this method specifically, because without type annotations on
-# v it is ambiguous. That's pretty annoying.
-function Base.:*(arc::Adjoint{Float64, RCholesky}, v::AbstractVector)
+function Base.:*(arc::Adjoint{T, RCholesky{T}}, v::AbstractVector) where {T}
   rc  = arc.parent
   buf = similar(v)
   mul!(buf, arc, v)
 end
 
-# I have to define this method specifically, because without type annotations on
-# v it is ambiguous. That's pretty annoying.
-function Base.:*(arc::Adjoint{Float64, RCholesky}, v::AbstractMatrix)
+function Base.:*(arc::Adjoint{T, RCholesky{T}}, v::AbstractMatrix) where {T}
   rc  = arc.parent
   buf = similar(v)
   mul!(buf, arc, v)
@@ -107,21 +95,21 @@ function Base.:\(rc::RCholesky, v::AbstractVector)
   ldiv!(buf, rc, v)
 end
 
-function LinearAlgebra.ldiv!(arc::Adjoint{Float64, RCholesky}, 
-                             v::AbstractVector)
+function LinearAlgebra.ldiv!(arc::Adjoint{T, RCholesky{T}}, 
+                             v::AbstractVector) where {T}
   rc = arc.parent
   ldiv!(rc.U', v)
   permute!(v, rc.ip)
 end
 
 function LinearAlgebra.ldiv!(buf::AbstractVector, 
-                             arc::Adjoint{Float64, RCholesky}, 
-                             v::AbstractVector)
+                             arc::Adjoint{T, RCholesky{T}}, 
+                             v::AbstractVector) where {T}
   copyto!(buf, v)
   ldiv!(arc, buf)
 end
 
-function Base.:\(arc::Adjoint{Float64, RCholesky}, v::AbstractVector)
+function Base.:\(arc::Adjoint{T, RCholesky{T}}, v::AbstractVector) where {T}
   buf = similar(v)
   ldiv!(buf, arc, v)
 end
@@ -200,8 +188,8 @@ Base.:\(rc::RCholeskyPreconditioner, v::AbstractMatrix) = ldiv!(similar(v), rc, 
 
 # For now, hard-coded for singleton.
 struct LazyRCholesky{C,T}
-  cfg::C # the actual VecchiaApproximation object
-  params::Vector{T} # a parameter of (potentially-valued) parameters.
+  cfg::C 
+  params::Vector{T}
   kwtbuffers::Vector{SingletonCondLogLikBuf{T}}
   outbuffers::Vector{Vector{T}}
   chunk_ixs::Vector{UnitRange{Int64}}
@@ -234,47 +222,47 @@ end
 LinearAlgebra.issymmetric(rc::LazyRCholesky) = false
 LinearAlgebra.ishermitian(rc::LazyRCholesky) = false
 
-struct RCholeskyStorage
-  diagonals::Vector{UpperTriangular{Float64,Matrix{Float64}}}
-  odiagonals::Vector{Matrix{Float64}}
+struct RCholeskyStorage{T}
+  diagonals::Vector{UpperTriangular{T,Matrix{T}}}
+  odiagonals::Vector{Matrix{T}}
   condix::Vector{Vector{Int64}}
   idxs::Vector{UnitRange{Int64}} 
   is_instantiated::Vector{Bool}
 end
 
-function RCholApplicationBuffer(U::RCholeskyStorage, ndata::Int64)
+function RCholApplicationBuffer(U::RCholeskyStorage{T}, ndata::Int64) where {T}
   m    = length(U.condix)
-  out  = Array{Float64}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
-  bufz = Array{Float64}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
-  bufv = Array{Float64}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
-  bufm = Array{Float64}(undef, maximum(length, U.idxs), ndata)
+  out  = Array{T}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufz = Array{T}(undef, maximum(j->size(U.odiagonals[j], 2), 1:m), ndata)
+  bufv = Array{T}(undef, maximum(length, U.condix)*maximum(length, U.idxs), ndata)
+  bufm = Array{T}(undef, maximum(length, U.idxs), ndata)
   RCholApplicationBuffer(bufv, bufm, bufz, out)
 end
 
-struct CondRCholBuf{D}
-  buf_pp::Matrix{Float64}
-  buf_cp::Matrix{Float64}
-  buf_cc::Matrix{Float64}
+struct CondRCholBuf{D, T}
+  buf_pp::Matrix{T}
+  buf_cp::Matrix{T}
+  buf_cc::Matrix{T}
   buf_cpts::Vector{SVector{D,Float64}}
 end
 
-function crcholbuf(::Val{D}, cpts_sz, pts_sz) where{D}
-  buf_pp = Array{Float64}(undef,  pts_sz,  pts_sz)
-  buf_cp = Array{Float64}(undef, cpts_sz,  pts_sz)
-  buf_cc = Array{Float64}(undef, cpts_sz, cpts_sz)
+function crcholbuf(::Val{D}, cpts_sz, pts_sz, ::Type{T}) where{D, T}
+  buf_pp = Array{T}(undef,  pts_sz,  pts_sz)
+  buf_cp = Array{T}(undef, cpts_sz,  pts_sz)
+  buf_cc = Array{T}(undef, cpts_sz, cpts_sz)
   buf_cpts = Array{SVector{D,Float64}}(undef, cpts_sz)
-  CondRCholBuf{D}(buf_pp, buf_cp, buf_cc, buf_cpts)
+  CondRCholBuf{D, T}(buf_pp, buf_cp, buf_cc, buf_cpts)
 end
 
-function prepare_diagonal_chunks(sizes)
+function prepare_diagonal_chunks(sizes, ::Type{T}) where {T}
   map(sizes) do sz
-    UpperTriangular{Float64, Matrix{Float64}}(I(sz))
+    UpperTriangular{T, Matrix{T}}(I(sz))
   end
 end
 
-function prepare_odiagonal_chunks(condix, sizes)
+function prepare_odiagonal_chunks(condix, sizes, ::Type{T}) where {T}
   map(enumerate(condix)) do (j,cj)
-    isempty(cj) ? zeros(0, 0) : zeros(sum(view(sizes, cj)), sizes[j])
+    isempty(cj) ? zeros(T, 0, 0) : zeros(T, sum(view(sizes, cj)), sizes[j])
   end
 end
 
@@ -283,21 +271,21 @@ end
 # TODO (cg 2025/12/16 11:25): in the chunked case, this produces a huge number
 # of allocations because it is a ton of small matrix allocations. For the
 # SingletonVecchiaConfig, this can probably be brought down dramatically.
-function RCholeskyStorage_alloc(V::ChunkedVecchiaApproximation{M,D,F}) where{M,D,F}
+function RCholeskyStorage_alloc(V::ChunkedVecchiaApproximation{M,D,F}, ::Type{T}) where{M,D,F,T}
   szs    = map(length, V.pts)
-  diags  = prepare_diagonal_chunks(szs)
-  odiags = prepare_odiagonal_chunks(V.condix, szs)
-  RCholeskyStorage(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
+  diags  = prepare_diagonal_chunks(szs, T)
+  odiags = prepare_odiagonal_chunks(V.condix, szs, T)
+  RCholeskyStorage{T}(diags, odiags, V.condix, globalidxs(V.pts), [false]) 
 end
 
 function allocate_crchol_bufs(V::ChunkedVecchiaApproximation{M,D,F}, 
-                              cpts_sz, pts_sz) where{M,D,F}
-  [crcholbuf(Val(D), cpts_sz, pts_sz) for _ in 1:nthreads()]
+                              cpts_sz, pts_sz, ::Type{T}) where{M,D,F,T}
+  [crcholbuf(Val(D), cpts_sz, pts_sz, T) for _ in 1:nthreads()]
 end
 
-function _rchol_instantiate_index!(strbuf::RCholeskyStorage, 
+function _rchol_instantiate_index!(strbuf::RCholeskyStorage{T}, 
                                    V::ChunkedVecchiaApproximation{M,D,F},
-                                   bufs, i::Int, j::Int, params, tiles) where{M,D,F}
+                                   bufs, i::Int, j::Int, params, tiles) where{M,D,F,T}
   # get the buffer for this thread:
   tbuf = bufs[i]
   # get the data and points:
@@ -305,7 +293,7 @@ function _rchol_instantiate_index!(strbuf::RCholeskyStorage,
   pts  = V.pts[j]
   cov_pp = view(tbuf.buf_pp, 1:length(pts), 1:length(pts))
   if isempty(idxs)
-    # In this special case, I actually can skip the lower triangle. 
+    # In this special case, I actually can skip the lower triangle.
     if tiles isa Nothing
       updatebuf!(cov_pp, pts, pts, V.kernel, params, skipltri=true)
     else
@@ -328,7 +316,7 @@ function _rchol_instantiate_index!(strbuf::RCholeskyStorage,
     end
     # prepare conditioning points:
     cpts = updateptsbuf!(tbuf.buf_cpts, V.pts, idxs)
-    # prepare and fill in the matrix buffers pertaining to the cond.  points:
+    # prepare and fill in the matrix buffers pertaining to the cond. points:
     cov_cp = view(tbuf.buf_cp, 1:length(cpts), 1:length(pts))
     cov_cc = view(tbuf.buf_cc, 1:length(cpts), 1:length(cpts))
     if tiles isa Nothing
@@ -376,16 +364,16 @@ function _rchol_instantiate_index!(strbuf::RCholeskyStorage,
   end
 end
 
-function rchol_instantiate!(strbuf::RCholeskyStorage, 
+function rchol_instantiate!(strbuf::RCholeskyStorage{T}, 
                             V::ChunkedVecchiaApproximation{M,D,F},
-                            params, tiles) where{M,D,F}
+                            params, tiles) where{M,D,F,T}
   @assert !strbuf.is_instantiated[] "This routine assumes an un-instantiated RCholeskyStorage. Please allocate a new one and try again."
   strbuf.is_instantiated[] = true
   cpts_sz = chunksize(V)*blockrank(V)
   pts_sz  = chunksize(V)
   # allocate three buffers:
   nthr = nthreads()
-  bufs = allocate_crchol_bufs(V, cpts_sz, pts_sz)
+  bufs = allocate_crchol_bufs(V, cpts_sz, pts_sz, T)
   # do the main loop:
   m = cld(length(V.condix), nthreads())
   blas_nthr = BLAS.get_num_threads()
@@ -403,11 +391,11 @@ end
 
 # TODO (cg 2025/12/15 13:16): some smarter way of indexing so that this can be
 # parallelized.
-function SparseArrays.sparse(U::RCholeskyStorage)
+function SparseArrays.sparse(U::RCholeskyStorage{T}) where {T}
   master_len = _nnz(U.idxs, U.condix)
   Iv = Vector{Int64}(undef, master_len)
   Jv = Vector{Int64}(undef, master_len)
-  Vv = Vector{Float64}(undef, master_len)
+  Vv = Vector{T}(undef, master_len)
   master_ix = 1
   # Diagonal blocks. This section makes no allocations and probably can't really
   # be improved upon.
@@ -438,6 +426,7 @@ function SparseArrays.sparse(U::RCholeskyStorage)
           @inbounds Iv[master_ix] = i1
           @inbounds Jv[master_ix] = i2
           @inbounds Vv[master_ix] = Bj[_i1+c_offset,_i2]
+  
           master_ix += 1
         end
       end
@@ -447,9 +436,9 @@ function SparseArrays.sparse(U::RCholeskyStorage)
   sparse(Iv, Jv, Vv)
 end
 
-function _rchol(V::ChunkedVecchiaApproximation{M,D,F}, params; 
-                use_tiles=false) where{M,D,F}
-  out   = RCholeskyStorage_alloc(V)
+function _rchol(V::ChunkedVecchiaApproximation{M,D,F}, params::AbstractVector{T}; 
+                use_tiles=false) where{M,D,F,T}
+  out   = RCholeskyStorage_alloc(V, T)
   tiles = use_tiles ? build_tiles(V, params) : nothing
   rchol_instantiate!(out, V, params, tiles)
 end
@@ -462,6 +451,7 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,P,F},
       for j in chunk
         valj = view(valbuf, vixs[j])
         cvar = prepare_conditional!(bufi, V, j, params)
+      
         idxs = V.condix[j]
         if isempty(idxs)
           valj[1] = inv(sqrt(cvar))
@@ -471,6 +461,7 @@ function _rchol_singleton!(valbuf, V::SingletonVecchiaApproximation{M,P,F},
           kwts .*= -isqrt_cvar
           view(valj, 1:(length(valj)-1)) .= kwts
           valj[end] = isqrt_cvar
+     
         end
       end
     end
@@ -487,6 +478,7 @@ function lazy_rchol_apply_item!(lrc::LazyRCholesky{C,T},
     vj   = v[j]
     cixj = cfg.condix[j]
     cvar = prepare_conditional!(kwtbufi, cfg, j, lrc.params)
+   
     isqrt_cvar  = inv(sqrt(cvar))
     outbufi[j] += vj*isqrt_cvar
     if !isempty(cixj)
@@ -509,7 +501,7 @@ function lazy_rchol_apply!(buf::AbstractVector{T}, lrc::LazyRCholesky{C,T},
   buf
 end
 
-function _rchol(V::SingletonVecchiaApproximation{M,P,F}, params) where{M,P,F}
+function _rchol(V::SingletonVecchiaApproximation{M,P,F}, params::AbstractVector{T}) where{M,P,F,T}
   n   = length(V.pts)
   # pre-allocate the COO format (I,J,V), like the output from findnz(sparse_matrix).
   nnz = sum(length, V.condix) + length(V.condix)
@@ -522,7 +514,7 @@ function _rchol(V::SingletonVecchiaApproximation{M,P,F}, params) where{M,P,F}
     push!(IJ, (j,j))
   end
   (I, J)   = (getindex.(IJ, 1), getindex.(IJ, 2))
-  vals     = Vector{Float64}(undef, nnz)
+  vals     = Vector{T}(undef, nnz)
   view_ixs = Vector{UnitRange{Int64}}()
   sizehint!(view_ixs, length(V.condix))
   current_ix = 1
@@ -552,19 +544,19 @@ Optional keyword arguments are:
 """
 function rchol end
 
-function rchol(V::ChunkedVecchiaApproximation{M,D,F}, params; 
-               use_tiles=false) where{M,D,F}
+function rchol(V::ChunkedVecchiaApproximation{M,D,F}, params::AbstractVector{T}; 
+               use_tiles=false) where{M,D,F,T}
   out = _rchol(V, params; use_tiles=use_tiles)
-  RCholesky(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
-            Array{Float64}(undef, length(V.pts)))
+  RCholesky{T}(UpperTriangular(sparse(out)), V.perm, invperm(V.perm),
+            Array{T}(undef, length(V.pts)))
 end
 
-function rchol(V::SingletonVecchiaApproximation{M,P,F}, params; 
-               use_tiles=false) where{M,P,F}
+function rchol(V::SingletonVecchiaApproximation{M,P,F}, params::AbstractVector{T};
+               use_tiles=false) where{M,P,F,T}
   use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
   out = _rchol(V, params)
-  RCholesky(out, V.perm, invperm(V.perm),
-            Array{Float64}(undef, length(V.pts)))
+  RCholesky{T}(out, V.perm, invperm(V.perm),
+            Array{T}(undef, length(V.pts)))
 end
 
 """
@@ -585,7 +577,8 @@ function rchol_preconditioner(V::ChunkedVecchiaApproximation{M,D,F},
 end
 
 function rchol_preconditioner(V::SingletonVecchiaApproximation{M,P,F},
-                              params; use_tiles=false) where{M,P,F}
+                              params;
+                              use_tiles=false) where{M,P,F}
   use_tiles && throw(error("Sorry, `use_tiles=true` is not currently implemented for singleton configurations."))
   out = _rchol(V, params)
   RCholeskyPreconditioner(out, V.perm, invperm(V.perm),
@@ -595,7 +588,8 @@ end
 """
 `lazy_rchol(cfg::VecchiaApproximation, params)::LazyRCholesky`
 
-Build a *lazy* `RCholesky` analog. Unlike `rchol` or `rchol_preconditioner`, this object does **not** actual build the sparse matrix. The resulting object effectively only implements `*` and `mul!` (and core things like `size` and `eltype` and so on). The purpose of this object is to use it in settings where (1) you will only need to do one matvec/mat-mat operation for any given `params`, and (2) you want to run AD like `ForwardDiff.jl` through the `mul!`. 
+Build a *lazy* `RCholesky` analog. Unlike `rchol` or `rchol_preconditioner`, this object does **not** actual build the sparse matrix. The resulting object effectively only implements `*` and `mul!` (and core things like `size` and `eltype` and so on). The purpose of this object is to use it in settings where (1) 
+you will only need to do one matvec/mat-mat operation for any given `params`, and (2) you want to run AD like `ForwardDiff.jl` through the `mul!`. 
 """
 function lazy_rchol end
 
@@ -607,3 +601,4 @@ function lazy_rchol(cfg::SingletonVecchiaApproximation,
   outbuffers = [Vector{T}(undef, n) for _ in 1:length(chunks)]
   LazyRCholesky(cfg, params, kwtbuffers, outbuffers, chunks, invperm(cfg.perm)) 
 end
+

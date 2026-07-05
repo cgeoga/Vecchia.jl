@@ -58,7 +58,6 @@ appx12 = VecchiaApproximation(pts, kernel, hcat(sim1, sim2);
                               ordering=RandomOrdering(StableRNG(12)),
                               conditioning=KNNConditioning(10))
 
-
 @testset "nll" begin
   @test isapprox(appxe(test_p), exact_nll(appxe, test_p))
 end
@@ -92,6 +91,18 @@ end
   v     = collect(1.0:length(pts1d))
   @test maximum(abs, pre*(pre'*v) - M\v) < 1e-10
   @test maximum(abs, pre'\(pre\v) - M*v) < 1e-10
+end
+
+@testset "ForwardDiff.jl through rchol" begin
+  pts1d  = rand(rng, SVector{1,Float64}, 100)
+  appx   = VecchiaApproximation(pts1d, kernel, ones(100); conditioning=KNNConditioning(5))
+  g_sum  = ForwardDiff.gradient(appx, [1.1, 0.1])
+  rc_nll = p -> begin
+    U = rchol(appx, p).U
+    (-2*logdet(U) + sum(abs2, U'*ones(100)))/2
+  end
+  @test appx([1.1, 0.1]) ≈ rc_nll([1.1, 0.1])
+  @test ForwardDiff.gradient(rc_nll, [1.1, 0.1]) ≈ g_sum
 end
 
 @testset "lazy_rchol mul" begin
