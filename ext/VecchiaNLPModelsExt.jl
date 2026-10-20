@@ -23,8 +23,9 @@ module VecchiaNLPModelsExt
                        expected_fisher=false,
                        box_lower=default_lowerbox(init),
                        box_upper=default_upperbox(init)) where{C}
-    meta      = NLPModelMeta(length(init); x0=init, lvar=box_lower, 
-                             uvar=box_upper, hprod_available=false)
+    n         = length(init)
+    meta      = NLPModelMeta(n; x0=init, lvar=box_lower, 
+                             uvar=box_upper, hprod_available=false, nnzh=div(n*(n+1), 2))
     (cov_ixs, mean_ixs) = (1:length(init), 1:length(init))
     cache_cfg = Vecchia.adcachewrapper(cfg, expected_fisher, cov_ixs, mean_ixs)
     VecchiaNLPModel(cache_cfg, meta, Counters(), length(init))
@@ -41,7 +42,7 @@ module VecchiaNLPModelsExt
     nparams    = length(init.cov_params) + length(init.mean_params)
     cov_ixs    = 1:ncovparams
     mean_ixs   = (ncovparams+1):nparams
-    cache_cfg = Vecchia.adcachewrapper(cfg, expected_fisher, cov_ixs, mean_ixs)
+    cache_cfg  = Vecchia.adcachewrapper(cfg, expected_fisher, cov_ixs, mean_ixs)
     VecchiaNLPModel(cache_cfg, meta, Counters(), length(init))
   end
 
@@ -85,14 +86,23 @@ module VecchiaNLPModelsExt
       fill(NaN, (length(x), length(x)))
     end
     _h .*= obj_weight
-    (sz, linear_idx) = (length(x), 1)
-    for col_idx in 1:sz
-      for row_idx in 1:col_idx
-        hvals[linear_idx] = _h[row_idx, col_idx]
-        linear_idx   += 1
+    idx = 1
+    for row in 1:vnlp.p
+      for col in 1:row
+        hvals[idx] = _h[row, col]
+        idx += 1
       end
     end
     hvals
+  end
+
+  # Only correct when there are not constraints!
+  function NLPModels.hess_coord!(vnlp::VecchiaNLPModel{C,T,S},
+                                 x::AbstractVector,
+                                 y::AbstractVector,
+                                 hvals::AbstractVector;
+                                 obj_weight=1) where{C,T,S}
+    NLPModels.hess_coord!(vnlp, x, hvals; obj_weight=obj_weight)
   end
 
   function Vecchia.optimize(obj, init, solver::Vecchia.NLPModelsSolver;
