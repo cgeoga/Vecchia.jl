@@ -151,6 +151,17 @@ function LinearAlgebra.mul!(buf::AbstractVector,
   copyto!(buf, rc.buf)
 end
 
+# fallback for complex vectors.
+function LinearAlgebra.mul!(buf::AbstractVector{ComplexF64}, 
+                            rc::RCholeskyPreconditioner, 
+                            v::AbstractVector{ComplexF64})
+  @warn "This mul! routine for RCholeskyPreconditioner with complex vectors currently allocates." maxlog=1
+  v_perm       = v[rc.p]
+  applied_perm = rc*real(v_perm) + (rc*imag(v_perm)).*im
+  permute!(applied_perm, rc.ip)
+  copyto!(buf, applied_perm)
+end
+
 function LinearAlgebra.mul!(buf::AbstractMatrix, 
                             rc::RCholeskyPreconditioner, 
                             v::AbstractMatrix)
