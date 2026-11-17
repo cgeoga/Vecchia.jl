@@ -30,6 +30,7 @@ function _gradient      end
 function _hessian       end
 
 function optimize end
+function optimize_solveroutput end
 
 """
 `vecchia_estimate(cfg::VecchiaApproximation, init::Vector{Float64}, solver; kwargs...)::Vector{Float64}`
@@ -51,6 +52,13 @@ function vecchia_estimate(cfg, init::Parameters, solver; kwargs...)
   res = optimize(cfg, init, solver; kwargs...)
   Parameters(res[1:length(init.cov_params)],
              res[(length(init.cov_params)+1):end])
+end
+
+
+function vecchia_estimate_solverouput end
+
+function vecchia_estimate_solveroutput(cfg, init::Vector{Float64}, solver; kwargs...)
+  optimize_solveroutput(cfg, init, solver; kwargs...)
 end
 
 function  nll_grad_fish end

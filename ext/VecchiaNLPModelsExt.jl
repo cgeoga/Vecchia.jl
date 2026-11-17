@@ -116,5 +116,13 @@ module VecchiaNLPModelsExt
     error("The returned result from your solver doesn't have the field :solution or :primal_solution.")
   end
 
+  function Vecchia.optimize_solveroutput(obj, init, solver::Vecchia.NLPModelsSolver;
+                                         expected_fisher=false,
+                                         box_lower=fill(0.0, length(init)),
+                                         box_upper=fill(Inf, length(init)))
+    nlp = Vecchia.nlp(obj, init; expected_fisher, box_lower, box_upper)
+    solver.solver(nlp; solver.opts...)
+  end
+
 end
 
