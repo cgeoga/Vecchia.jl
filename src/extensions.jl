@@ -55,7 +55,7 @@ function vecchia_estimate(cfg, init::Parameters, solver; kwargs...)
 end
 
 
-function vecchia_estimate_solverouput end
+function vecchia_estimate_solveroutput end
 
 function vecchia_estimate_solveroutput(cfg, init::Vector{Float64}, solver; kwargs...)
   optimize_solveroutput(cfg, init, solver; kwargs...)
