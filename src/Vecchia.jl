@@ -20,8 +20,6 @@ module Vecchia
 
   include("nll.jl")
 
-  include("reml.jl")
-
   include("rcholesky.jl")
   export rchol, rchol_preconditioner, lazy_rchol
 
